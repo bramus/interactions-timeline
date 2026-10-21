@@ -1,0 +1,53 @@
+{
+  "name": "timeline-visualizer",
+  "version": "1.0.0",
+  "description": "A page timeline recorder and interactive visualizer with time-scrubbing for CSS animations, CSS transitions, WAAPI, Scroll-Driven Animations, scroll positions, and user interactions",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "generate-screenshot": "node scripts/generate-screenshot.js",
+    "prepublishOnly": "if [ -z $PUBLISH ]; then echo 'This package must be published using `npm run pub`\\n' && exit 1; fi",
+    "pub": "PUBLISH=true npm run build && npm publish ./dist",
+    "start": "npx -y serve src",
+    "dev": "npx -y serve src",
+    "deploy": "netlify deploy --dir=src --prod",
+    "deploy:preview": "netlify deploy --dir=src",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test tests/unit/**/*.test.js",
+    "test:e2e": "node --test tests/e2e/**/*.test.js"
+  },
+  "keywords": [
+    "timeline-visualizer",
+    "timeline-recorder",
+    "web-animations",
+    "scroll-driven-animations",
+    "css-animations",
+    "css-transitions",
+    "waapi",
+    "custom-element",
+    "web-components",
+    "devtools"
+  ],
+  "author": {
+    "name": "Bramus Van Damme",
+    "email": "bramus@bram.us",
+    "url": "https://www.bram.us/"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bramus/timeline-visualizer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bramus/timeline-visualizer/issues"
+  },
+  "homepage": "https://timeline-visualizer.netlify.app/",
+  "devDependencies": {
+    "puppeteer": "^25.11.0"
+  }
+}

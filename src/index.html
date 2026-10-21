@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en" data-syntax-theme="github">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>&lt;timeline-visualizer&gt; – Page Animation, Transition &amp; Interaction Timeline Recorder</title>
+  <meta name="description" content="Record and visualize CSS animations, CSS transitions, WAAPI animations, Scroll-Driven Animations, scroll positions, and user interactions with full time-scrubbing.">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://timeline-visualizer.netlify.app/">
+  <meta property="og:title" content="&lt;timeline-visualizer&gt; – Page Animation, Transition &amp; Interaction Timeline Recorder">
+  <meta property="og:description" content="Record and visualize CSS animations, CSS transitions, WAAPI animations, Scroll-Driven Animations, scroll positions, and user interactions with full time-scrubbing.">
+  <meta property="og:image" content="https://timeline-visualizer.netlify.app/assets/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="&lt;timeline-visualizer&gt; – Page Animation, Transition &amp; Interaction Timeline Recorder">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="&lt;timeline-visualizer&gt; – Page Animation, Transition &amp; Interaction Timeline Recorder">
+  <meta name="twitter:description" content="Record and visualize CSS animations, CSS transitions, WAAPI animations, Scroll-Driven Animations, scroll positions, and user interactions with full time-scrubbing.">
+  <meta name="twitter:image" content="https://timeline-visualizer.netlify.app/assets/og-image.jpg">
+  <meta name="twitter:creator" content="@bramus">
+
+  <link rel="stylesheet" href="https://davatron5000.github.io/microlighter/microlighter/themes/github.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="https://davatron5000.github.io/microlighter/microlighter/micro-lighter-element.min.js"></script>
+  <script type="module" src="js/timeline-visualizer/index.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+
+<body>
+  <!-- Encapsulated Recorder & Bottom-Sheet Visualizer Custom Element -->
+  <timeline-visualizer id="page-timeline-visualizer"></timeline-visualizer>
+
+  <div class="container">
+    <header>
+      <div class="header-top">
+        <div class="title-group">
+          <h1><span class="title-tag">&lt;timeline-visualizer&gt;</span></h1>
+        </div>
+        <div class="header-actions">
+          <a href="https://github.com/bramus/timeline-visualizer" class="github-btn" target="_blank" rel="noopener noreferrer" aria-label="View on GitHub">
+            <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            <span>GitHub</span>
+          </a>
+          <a href="https://npmjs.com/package/timeline-visualizer" class="npm-btn" target="_blank" rel="noopener noreferrer" aria-label="View on npm">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.04 19.17H5.113z" />
+            </svg>
+            <span>npm</span>
+          </a>
+          <a href="https://www.bram.us/" class="bramus-btn" target="_blank" rel="noopener noreferrer" aria-label="Read on Bram.us">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            <span>Bram.us</span>
+          </a>
+        </div>
+      </div>
+      <p class="description">
+        An encapsulated Web Component (<code>&lt;timeline-visualizer&gt;</code>) that records CSS animations, CSS transitions, Web Animations API (<code>element.animate()</code>) calls, Scroll-Driven Animations (<code>ScrollTimeline</code> &amp; <code>ViewTimeline</code>), scroll positions, user interactions, and DOM element removals—then pauses the page and lets you scrub backward and forward through the page’s visual history in a collapsible, resizable bottom sheet.
+      </p>
+    </header>
+
+    <div class="page-layout">
+      <!-- Sidenav / Scrollspy -->
+      <aside class="sidebar">
+        <nav class="sidenav" aria-label="Table of contents">
+          <div class="sidenav-title">Interactive Labs</div>
+          <ul class="sidenav-list">
+            <li><a href="#overview">Overview &amp; Auto-Demo</a></li>
+            <li><a href="#lab-css-animations">1. CSS Animations</a></li>
+            <li><a href="#lab-css-transitions">2. CSS Transitions</a></li>
+            <li><a href="#lab-waapi">3. WAAPI Animations</a></li>
+            <li><a href="#lab-scroll-driven">4. Scroll-Driven &amp; Scrollers</a></li>
+            <li><a href="#lab-removed-elements">5. Removed DOM Elements</a></li>
+            <li><a href="#lab-interactions">6. User Interactions</a></li>
+            <li class="sidenav-divider">Documentation</li>
+            <li><a href="#installation">Installation &amp; Usage</a></li>
+            <li><a href="#javascript-api">JavaScript API</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Overview & Quick Auto-Demo -->
+        <section id="overview">
+          <h2>Overview &amp; One-Click Demo</h2>
+          <p class="section-desc">
+            Click <strong>Start Recording</strong> in the top-right corner, interact with any of the animation playgrounds below, and click <strong>Stop Recording</strong> to inspect and scrub the timeline—or click <strong>Auto-Record Full Showcase</strong> below to run an automated sequence across all animation types.
+          </p>
+
+          <div class="card highlight-card">
+            <div class="card-header">
+              <span class="card-title">Quick Showcase Runner</span>
+              <span class="card-meta">Records CSS Animations, Transitions, WAAPI, Scroll &amp; DOM Removal</span>
+            </div>
+            <div class="demo-Controls-row">
+              <button type="button" id="run-auto-demo-btn" class="btn btn-primary">
+                🎬 Auto-Record Full Showcase (~1.4s)
+              </button>
+              <span id="auto-demo-status" class="status-text">Ready to record</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 1. CSS Animations (Delays, Iterations, Infinite) -->
+        <section id="lab-css-animations">
+          <h2>1. CSS Animations (Delays, Iterations &amp; Infinite)</h2>
+          <p class="section-desc">
+            Demonstrates capturing infinite animations already running when recording starts via <code>document.getAnimations()</code>, as well as triggered CSS animations with <code>animation-delay</code>, multiple <code>animationiteration</code> events, <code>animationend</code>, and <code>animationcancel</code>.
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">CSS Keyframe Actors</span>
+              <span class="card-meta">animationstart · animationiteration · animationend · animationcancel</span>
+            </div>
+
+            <div class="actors-grid">
+              <!-- Infinite CSS Animation Actor -->
+              <div class="actor-panel">
+                <div class="actor-stage">
+                  <div id="infinite-spinner" class="demo-actor infinite-orbit">
+                    <span>∞ Orbit</span>
+                  </div>
+                </div>
+                <div class="actor-info">
+                  <code>div#infinite-spinner.demo-actor.infinite-orbit</code>
+                  <p>Always running (<code>infinite</code>). Captured immediately when recording starts and paused when visualizing.</p>
+                </div>
+              </div>
+
+              <!-- Delayed + Multi-iteration CSS Animation Actor -->
+              <div class="actor-panel">
+                <div class="actor-stage">
+                  <div id="delayed-iter-box" class="demo-actor iter-pulse-target">
+                    <span>Delay + 3× Iter</span>
+                  </div>
+                </div>
+                <div class="actor-info">
+                  <code>div#delayed-iter-box.demo-actor.iter-pulse-target</code>
+                  <p>160ms delay, 3 iterations of 260ms each.</p>
+                  <div class="btn-group">
+                    <button type="button" id="trigger-css-anim-btn" class="btn">Run Delayed 3× Animation</button>
+                    <button type="button" id="cancel-css-anim-btn" class="btn btn-outline">Cancel Mid-Flight</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. CSS Transitions (with Delay between transitionrun and transitionstart) -->
+        <section id="lab-css-transitions">
+          <h2>2. CSS Transitions</h2>
+          <p class="section-desc">
+            Demonstrates recording <code>transitionrun</code>, the delay segment before <code>transitionstart</code>, and <code>transitionend</code> / <code>transitioncancel</code>. Keyframes are snapshotted while active so completed transitions can be scrubbed backward and forward.
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Delayed Multi-Property Transition</span>
+              <span class="card-meta">transitionrun → delay (120ms) → transitionstart → transitionend</span>
+            </div>
+
+            <div class="actor-panel horizontal">
+              <div class="actor-stage wide-stage">
+                <div id="transition-card" class="demo-actor transition-box">
+                  <span>Transition Box</span>
+                </div>
+              </div>
+              <div class="actor-info">
+                <code>div#transition-card.demo-actor.transition-box</code>
+                <p>Transitions <code>transform</code> and <code>background-color</code> over 360ms after a 120ms delay.</p>
+                <div class="btn-group">
+                  <button type="button" id="trigger-transition-btn" class="btn">Toggle Transition State</button>
+                  <button type="button" id="cancel-transition-btn" class="btn btn-outline">Interrupt / Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Web Animations API (element.animate) -->
+        <section id="lab-waapi">
+          <h2>3. Web Animations API (<code>element.animate()</code>)</h2>
+          <p class="section-desc">
+            JS-driven animations created with <code>element.animate()</code> do not fire DOM <code>animationstart</code> events—they are captured via <code>document.getAnimations()</code> and our WAAPI hook, including their keyframes, iterations, and computed timing.
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">WAAPI Keyframe Effect</span>
+              <span class="card-meta">element.animate(keyframes, options)</span>
+            </div>
+
+            <div class="actor-panel horizontal">
+              <div class="actor-stage wide-stage">
+                <div id="waapi-actor" class="demo-actor waapi-box">
+                  <span>WAAPI Actor</span>
+                </div>
+              </div>
+              <div class="actor-info">
+                <code>div#waapi-actor.demo-actor.waapi-box</code>
+                <p>Runs a 2-iteration alternating keyframe animation via <code>element.animate()</code>.</p>
+                <div class="btn-group">
+                  <button type="button" id="trigger-waapi-btn" class="btn">Trigger element.animate()</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. Scroll-Driven Animations & Scrollable Containers -->
+        <section id="lab-scroll-driven">
+          <h2>4. Scroll-Driven Animations &amp; Scrollable Containers</h2>
+          <p class="section-desc">
+            Scroll the container below (or click the scroll button) during a recording. The recorder tracks both <code>scrollTop</code> / <code>scrollLeft</code> on the container and the progress of its <code>ScrollTimeline</code> and <code>ViewTimeline</code> animations. Scrubbing the timeline playhead restores both the scroll offset and the animation progress!
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Scrollable Container with ScrollTimeline &amp; ViewTimeline</span>
+              <span class="card-meta">ScrollTimeline · ViewTimeline · scrollTop</span>
+            </div>
+
+            <div class="scroll-lab-controls">
+              <button type="button" id="trigger-scroll-btn" class="btn">↕ Programmatic Scroll Sweep</button>
+              <span class="scroll-readout" id="scroll-stage-readout">scrollTop: 0px</span>
+            </div>
+
+            <div id="scroll-stage" class="scroll-container" tabindex="0" aria-label="Scrollable demo container">
+              <div class="scroll-sticky-header">
+                <span class="scroll-sticky-label">ScrollTimeline Progress</span>
+                <div class="scroll-progress-track">
+                  <div id="scroll-progress-bar" class="scroll-driven-bar"></div>
+                </div>
+              </div>
+
+              <div class="scroll-content">
+                <p class="scroll-step">Scroll down inside <code>div#scroll-stage.scroll-container</code> ↓</p>
+                <div class="scroll-spacer"></div>
+                <div id="view-reveal-card" class="view-driven-card">
+                  <strong>ViewTimeline Reveal Card</strong>
+                  <span>Animates as it enters &amp; crosses the scrollport</span>
+                </div>
+                <div class="scroll-spacer"></div>
+                <p class="scroll-step">Bottom of scrollable container reached ✓</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Elements that Animate & Get Removed from the DOM -->
+        <section id="lab-removed-elements">
+          <h2>5. Elements that Animate &amp; Get Removed from the DOM</h2>
+          <p class="section-desc">
+            When a tracked element is disconnected from the DOM (<code>!element.isConnected</code>), its row in the timeline is greyed out, displays a <strong>⚠️ Removed</strong> warning indicator, and renders its recorded animation boxes and events as outlines.
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Ephemeral DOM Elements</span>
+              <span class="card-meta">!element.isConnected · MutationObserver</span>
+            </div>
+
+            <div class="ephemeral-controls">
+              <button type="button" id="trigger-remove-btn" class="btn">✨ Animate &amp; Remove Ephemeral Chip</button>
+              <button type="button" id="spawn-ephemeral-btn" class="btn btn-outline">+ Add Chip</button>
+            </div>
+
+            <div id="ephemeral-list" class="ephemeral-stage">
+              <div id="ephemeral-chip-1" class="ephemeral-chip">
+                <span>Ephemeral Chip #1</span>
+              </div>
+              <div id="ephemeral-chip-2" class="ephemeral-chip">
+                <span>Ephemeral Chip #2</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. User Interactions (Clicks & Keyboard Events) -->
+        <section id="lab-interactions">
+          <h2>6. User Interactions (Clicks &amp; Keyboard Events)</h2>
+          <p class="section-desc">
+            Discrete user interactions (<code>click</code>, <code>keydown</code>, <code>keyup</code>) are recorded with relative timestamps and rendered as color-coded vertical markers on both the target element’s row and the pinned <code>window / document</code> row.
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Click &amp; Keyboard Playground</span>
+              <span class="card-meta">click · keydown · keyup</span>
+            </div>
+
+            <div class="interaction-row">
+              <button type="button" id="interaction-btn" class="btn">
+                🖱 Click Me (<span id="click-count">0</span>)
+              </button>
+              <input
+                type="text"
+                id="keyboard-target"
+                class="demo-input"
+                placeholder="Type here while recording to log key events…"
+                aria-label="Keyboard event test input"
+              >
+            </div>
+          </div>
+        </section>
+
+        <!-- Installation & Usage -->
+        <section id="installation">
+          <h2>Installation &amp; Usage</h2>
+          <p class="section-desc">
+            Drop <code>&lt;timeline-visualizer&gt;</code> into any page to inspect and scrub its animations, transitions, and scroll interactions.
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Quick Start</span>
+              <span class="card-meta">ESM / NPM</span>
+            </div>
+            <micro-lighter language="html" copy-button><pre><code>&lt;script type="module" src="timeline-visualizer"&gt;&lt;/script&gt;
+
+&lt;!-- Optional: explicitly place the custom element (auto-injected if omitted) --&gt;
+&lt;timeline-visualizer&gt;&lt;/timeline-visualizer&gt;</code></pre></micro-lighter>
+          </div>
+        </section>
+
+        <!-- JavaScript API -->
+        <section id="javascript-api">
+          <h2>JavaScript API</h2>
+          <p class="section-desc">
+            In addition to the injected top-right recording button and interactive bottom-sheet scrubber, you can control <code>&lt;timeline-visualizer&gt;</code> programmatically:
+          </p>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Programmatic Control</span>
+              <span class="card-meta">Methods &amp; Properties</span>
+            </div>
+            <micro-lighter language="javascript" copy-button><pre><code>const visualizer = document.querySelector('timeline-visualizer');
+
+// Start and stop recording programmatically
+visualizer.startRecording();
+const store = visualizer.stopRecording();
+
+// Scrub the page (animations, transitions, and scrollers) to 450ms
+visualizer.scrubToTime(450);
+
+// Close or reset the visualizer and unpause all page animations
+visualizer.closeVisualizer();
+visualizer.reset();</code></pre></micro-lighter>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,541 @@
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import puppeteer from 'puppeteer';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SRC_DIR = path.resolve(__dirname, '../../src');
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+};
+
+function startStaticServer(rootDir) {
+  return new Promise((resolve) => {
+    const server = http.createServer(async (req, res) => {
+      try {
+        const reqUrl = new URL(req.url, 'http://127.0.0.1');
+        let pathname = decodeURIComponent(reqUrl.pathname);
+        if (pathname === '/') pathname = '/index.html';
+
+        const resolvedRoot = path.resolve(rootDir);
+        const filePath = path.resolve(resolvedRoot, '.' + pathname);
+        // Prevent directory traversal outside rootDir
+        if (!filePath.startsWith(resolvedRoot + path.sep) && filePath !== resolvedRoot) {
+          res.writeHead(403);
+          res.end('Forbidden');
+          return;
+        }
+
+        const data = await fs.readFile(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        res.writeHead(200, {
+          'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+        });
+        res.end(data);
+      } catch {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      resolve({ server, url: `http://127.0.0.1:${port}` });
+    });
+  });
+}
+
+describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver BiDi)', () => {
+  let serverInfo;
+  let browser;
+  let page;
+
+  before(async () => {
+    serverInfo = await startStaticServer(SRC_DIR);
+    browser = await puppeteer.launch({
+      protocol: 'webDriverBiDi',
+      headless: true,
+    });
+    page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.goto(serverInfo.url, { waitUntil: 'networkidle0' });
+  });
+
+  after(async () => {
+    if (browser) {
+      await browser.close();
+    }
+    if (serverInfo?.server) {
+      await new Promise((resolve) => serverInfo.server.close(resolve));
+    }
+  });
+
+  it('mounts <timeline-visualizer> with Shadow DOM and positions the record button in the top right', async () => {
+    const info = await page.evaluate(() => {
+      const el = document.querySelector('timeline-visualizer');
+      if (!el || !el.shadowRoot) return null;
+
+      const floatingBar = el.shadowRoot.querySelector('.recorder-floating-bar');
+      const recBtn = el.shadowRoot.querySelector('[data-testid="record-btn"]');
+      const sheet = el.shadowRoot.querySelector('[data-testid="bottom-sheet"]');
+      const barRect = floatingBar.getBoundingClientRect();
+      const barStyle = window.getComputedStyle(floatingBar);
+
+      return {
+        hasShadowRoot: Boolean(el.shadowRoot),
+        hasRecBtn: Boolean(recBtn),
+        recBtnText: recBtn.textContent.trim(),
+        position: barStyle.position,
+        top: barRect.top,
+        rightDistance: window.innerWidth - barRect.right,
+        sheetHiddenInitially: sheet.hidden,
+      };
+    });
+
+    assert.ok(info, '<timeline-visualizer> should exist with an open shadowRoot');
+    assert.equal(info.hasShadowRoot, true);
+    assert.equal(info.hasRecBtn, true);
+    assert.equal(info.recBtnText, 'Start Recording');
+    assert.equal(info.position, 'fixed');
+    assert.ok(info.top <= 30, `Expected top-right button near top, got top=${info.top}`);
+    assert.ok(info.rightDistance <= 30, `Expected top-right button near right, got rightDistance=${info.rightDistance}`);
+    assert.equal(info.sheetHiddenInitially, true);
+  });
+
+  it('records animations, transitions (with delay), WAAPI, scroll-driven animations, scrolls, interactions, and removed DOM elements while ignoring its own subtree', async () => {
+    const recordingSummary = await page.evaluate(async () => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const recBtn = visualizer.shadowRoot.querySelector('[data-testid="record-btn"]');
+
+      // Reset scroll and transition state before test
+      const scrollStage = document.getElementById('scroll-stage');
+      scrollStage.scrollTop = 0;
+      window.scrollTo(0, 0);
+      const transCard = document.getElementById('transition-card');
+      transCard.classList.remove('is-moved');
+
+      // Click top-right Record button to start recording
+      recBtn.click();
+
+      // Dispatch a synthetic click inside the recorder's own Shadow DOM to verify it is ignored
+      const floatingBar = visualizer.shadowRoot.querySelector('.recorder-floating-bar');
+      floatingBar.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+
+      await new Promise((r) => setTimeout(r, 40));
+
+      // 1. Trigger delayed multi-iteration CSS animation
+      document.getElementById('trigger-css-anim-btn').click();
+
+      // 2. Trigger CSS transition (120ms delay + 360ms duration)
+      document.getElementById('trigger-transition-btn').click();
+
+      // 3. Trigger WAAPI element.animate()
+      document.getElementById('trigger-waapi-btn').click();
+
+      // 4. Trigger user interaction click & keyboard event
+      document.getElementById('interaction-btn').click();
+      const kbInput = document.getElementById('keyboard-target');
+      kbInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', bubbles: true }));
+
+      // 5. Trigger ephemeral element animation + DOM removal (!element.isConnected)
+      document.getElementById('trigger-remove-btn').click();
+
+      // 6. Scroll both the scrollable container (#scroll-stage) and root window
+      await new Promise((r) => setTimeout(r, 80));
+      scrollStage.scrollTop = 120;
+      scrollStage.dispatchEvent(new Event('scroll'));
+      window.scrollTo(0, 90);
+      window.dispatchEvent(new Event('scroll'));
+
+      await new Promise((r) => setTimeout(r, 120));
+      scrollStage.scrollTop = 260;
+      scrollStage.dispatchEvent(new Event('scroll'));
+
+      // Wait for transition (120ms delay + 360ms = 480ms), CSS animation iterations, and DOM removal (240ms) to finish
+      await new Promise((r) => setTimeout(r, 700));
+
+      // Click top-right Record button to stop recording
+      recBtn.click();
+
+      const sheet = visualizer.shadowRoot.querySelector('[data-testid="bottom-sheet"]');
+      const pinnedRow = visualizer.shadowRoot.querySelector('[data-testid="pinned-global-row"]');
+      const elementRows = Array.from(
+        visualizer.shadowRoot.querySelectorAll('[data-testid="element-row"]')
+      );
+      const rowSelectors = elementRows.map((r) => r.getAttribute('data-selector'));
+
+      // Verify no element inside <timeline-visualizer> was recorded
+      const hasOwnSubtreeRow = rowSelectors.some((s) => s.includes('timeline-visualizer') || s.includes('rec-btn'));
+
+      // Check boxes and lifecycle lines
+      const boxes = Array.from(
+        visualizer.shadowRoot.querySelectorAll('[data-testid="timeline-box"]')
+      );
+      const drivers = boxes.map((b) => b.getAttribute('data-driver'));
+      const categories = boxes.map((b) => b.getAttribute('data-category'));
+      const delaySegments = visualizer.shadowRoot.querySelectorAll('[data-testid="box-delay-segment"]').length;
+      const runLines = visualizer.shadowRoot.querySelectorAll('[data-line-type="run"]').length;
+      const startLines = visualizer.shadowRoot.querySelectorAll('[data-line-type="start"]').length;
+      const iterLines = visualizer.shadowRoot.querySelectorAll('[data-line-type="iteration"]').length;
+      const endLines = visualizer.shadowRoot.querySelectorAll('[data-line-type="end"]').length;
+
+      // Check removed element row
+      const removedRow = visualizer.shadowRoot.querySelector('[data-testid="element-row"][data-removed="true"]');
+      const removedWarning = removedRow?.querySelector('[data-testid="removed-warning"]');
+      const removedOutlineBox = removedRow?.querySelector('[data-testid="timeline-box"][data-outline="true"]');
+
+      return {
+        sheetVisible: !sheet.hidden,
+        hasPinnedGlobalRow: Boolean(pinnedRow),
+        globalEventsCount: visualizer.store.globalRow.events.length,
+        globalScrollSamplesCount: visualizer.store.globalRow.scrollSamples.length,
+        rowSelectors,
+        hasOwnSubtreeRow,
+        categories,
+        drivers,
+        delaySegments,
+        runLines,
+        startLines,
+        iterLines,
+        endLines,
+        hasRemovedRow: Boolean(removedRow),
+        removedWarningText: removedWarning?.textContent.trim() || '',
+        hasRemovedOutlineBox: Boolean(removedOutlineBox),
+      };
+    });
+
+    assert.equal(recordingSummary.sheetVisible, true, 'Bottom sheet should open after recording stops');
+    assert.equal(recordingSummary.hasPinnedGlobalRow, true, 'Pinned global window/document row should exist');
+    assert.ok(recordingSummary.globalEventsCount >= 2, 'Global row should record keyboard and root scroll events');
+    assert.ok(recordingSummary.globalScrollSamplesCount >= 2, 'Global row should record root scroll samples');
+    assert.equal(recordingSummary.hasOwnSubtreeRow, false, 'Recorder own DOM subtree must be ignored');
+
+    // Verify all categories and timeline drivers were captured
+    assert.ok(recordingSummary.categories.includes('css-animation'), 'Should record CSS animations');
+    assert.ok(recordingSummary.categories.includes('transition'), 'Should record CSS transitions');
+    assert.ok(recordingSummary.categories.includes('waapi'), 'Should record WAAPI element.animate()');
+    assert.ok(recordingSummary.drivers.includes('time'), 'Should detect time-driven animations');
+    assert.ok(
+      recordingSummary.drivers.includes('scroll') || recordingSummary.drivers.includes('view'),
+      'Should detect ScrollTimeline / ViewTimeline scroll-driven animations'
+    );
+
+    // Verify color-coded lines & delay segments on boxes
+    assert.ok(recordingSummary.delaySegments >= 1, 'Should render delay segment between run and start');
+    assert.ok(recordingSummary.runLines >= 1, 'Should render run lines on boxes');
+    assert.ok(recordingSummary.startLines >= 1, 'Should render start lines on boxes');
+    assert.ok(recordingSummary.iterLines >= 1, 'Should render iteration lines on multi-iteration animations');
+    assert.ok(recordingSummary.endLines >= 1, 'Should render end lines on completed animations/transitions');
+
+    // Verify removed element row styling, warning badge, and outline boxes
+    assert.equal(recordingSummary.hasRemovedRow, true, 'Disconnected DOM element should have a greyed-out removed row');
+    assert.ok(
+      recordingSummary.removedWarningText.includes('Removed'),
+      `Expected warning indicator on removed row, got: ${recordingSummary.removedWarningText}`
+    );
+    assert.equal(
+      recordingSummary.hasRemovedOutlineBox,
+      true,
+      'Boxes inside a removed element row should be rendered as outlines'
+    );
+  });
+
+  it('highlights the corresponding page element when hovering a connected element row', async () => {
+    const hoverResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const connectedRow = visualizer.shadowRoot.querySelector(
+        '[data-testid="element-row"][data-removed="false"]'
+      );
+      const overlay = visualizer.shadowRoot.querySelector('[data-testid="element-highlight-overlay"]');
+
+      connectedRow.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      const visibleOnHover = !overlay.hidden;
+      const badgeText = overlay.textContent;
+
+      connectedRow.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+      const hiddenOnLeave = overlay.hidden;
+
+      return { visibleOnHover, badgeText, hiddenOnLeave };
+    });
+
+    assert.equal(hoverResult.visibleOnHover, true, 'Hovering a connected element row should show highlight overlay');
+    assert.ok(hoverResult.badgeText.length > 0, 'Highlight overlay should display element selector and dimensions');
+    assert.equal(hoverResult.hiddenOnLeave, true, 'Leaving the row should hide highlight overlay');
+  });
+
+  it('supports collapsing, expanding, and resizing the bottom sheet', async () => {
+    const sheetState = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const sheet = visualizer.shadowRoot.querySelector('[data-testid="bottom-sheet"]');
+      const collapseBtn = visualizer.shadowRoot.querySelector('[data-testid="collapse-btn"]');
+
+      visualizer.setSheetHeight(320);
+      const resizedHeight = sheet.getBoundingClientRect().height;
+
+      collapseBtn.click();
+      const collapsedClass = sheet.classList.contains('is-collapsed');
+      const collapsedHeight = sheet.getBoundingClientRect().height;
+
+      collapseBtn.click();
+      const expandedAgain = !sheet.classList.contains('is-collapsed');
+
+      return { resizedHeight, collapsedClass, collapsedHeight, expandedAgain };
+    });
+
+    assert.equal(Math.round(sheetState.resizedHeight), 320);
+    assert.equal(sheetState.collapsedClass, true);
+    assert.ok(sheetState.collapsedHeight <= 50);
+    assert.equal(sheetState.expandedAgain, true);
+  });
+
+  it('pauses page animations when presented and scrubs both scroll positions and completed/active animations across history', async () => {
+    const scrubResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const infiniteSpinner = document.getElementById('infinite-spinner');
+      const transitionCard = document.getElementById('transition-card');
+      const scrollStage = document.getElementById('scroll-stage');
+
+      // 1. Check that infinite spinner animation is paused while visualizer is open
+      const spinnerAnims = infiniteSpinner.getAnimations();
+      const spinnerPaused = spinnerAnims.every((a) => a.playState === 'paused');
+
+      // Find the recorded transform transition on #transition-card
+      const transTrack = visualizer.store.getOrCreateElementTrack(transitionCard);
+      const transformRecord = transTrack.animations.find(
+        (a) => a.category === 'transition' && a.name.includes('transform')
+      );
+
+      // 2. Scrub to t = 0 (start of recording, before transition & before scroll)
+      visualizer.scrubToTime(0);
+      const scrollAtZero = scrollStage.scrollTop;
+      const winScrollAtZero = window.scrollY;
+      const transformAtZero = window.getComputedStyle(transitionCard).transform;
+
+      // 3. Scrub to midpoint of the active transition
+      const midTransTime = (transformRecord.startTime + transformRecord.endTime) / 2;
+      visualizer.scrubToTime(midTransTime);
+      const transformAtMid = window.getComputedStyle(transitionCard).transform;
+
+      // 4. Scrub to end of recording (t = duration, after transition and after scroll)
+      visualizer.scrubToTime(visualizer.store.duration);
+      const scrollAtEnd = scrollStage.scrollTop;
+      const winScrollAtEnd = window.scrollY;
+      const transformAtEnd = window.getComputedStyle(transitionCard).transform;
+
+      return {
+        spinnerPaused,
+        scrollAtZero,
+        winScrollAtZero,
+        scrollAtEnd,
+        winScrollAtEnd,
+        transformAtZero,
+        transformAtMid,
+        transformAtEnd,
+        isRecordingDuringScrub: visualizer.isRecording,
+      };
+    });
+
+    assert.equal(scrubResult.spinnerPaused, true, 'Active page animations must be paused when visualizer is open');
+    assert.equal(scrubResult.isRecordingDuringScrub, false, 'Scrubbing must not trigger recording');
+
+    // Verify scroll positions scrub between 0 and recorded end offsets
+    assert.equal(Math.round(scrubResult.scrollAtZero), 0, 'Container scrollTop at t=0 should be 0');
+    assert.ok(scrubResult.scrollAtEnd >= 200, `Container scrollTop at end should be restored (>=200), got ${scrubResult.scrollAtEnd}`);
+    assert.equal(Math.round(scrubResult.winScrollAtZero), 0, 'Window scrollY at t=0 should be 0');
+    assert.ok(scrubResult.winScrollAtEnd >= 50, `Window scrollY at end should be restored (>=50), got ${scrubResult.winScrollAtEnd}`);
+
+    // Verify completed CSS transition is re-created and seeked across start, midpoint, and end!
+    assert.notEqual(
+      scrubResult.transformAtZero,
+      scrubResult.transformAtMid,
+      `Transform at t=0 (${scrubResult.transformAtZero}) should differ from mid-transition (${scrubResult.transformAtMid})`
+    );
+    assert.notEqual(
+      scrubResult.transformAtMid,
+      scrubResult.transformAtEnd,
+      `Transform at mid-transition (${scrubResult.transformAtMid}) should differ from post-transition (${scrubResult.transformAtEnd})`
+    );
+  });
+
+  it('restores and unpauses the page back to its normal interactive state when closed or reset', async () => {
+    const restoreResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const infiniteSpinner = document.getElementById('infinite-spinner');
+      const closeBtn = visualizer.shadowRoot.querySelector('[data-testid="close-btn"]');
+
+      closeBtn.click();
+
+      const sheetHidden = visualizer.shadowRoot.querySelector('[data-testid="bottom-sheet"]').hidden;
+      const spinnerAnims = infiniteSpinner.getAnimations();
+      const spinnerRunningAgain = spinnerAnims.some((a) => a.playState === 'running');
+      const scrubAnimsRemaining = visualizer._scrubAnimationSet.size;
+
+      // Also test reset()
+      visualizer.reset();
+      const tracksAfterReset = visualizer.store.getTracks().length;
+
+      return {
+        sheetHidden,
+        spinnerRunningAgain,
+        scrubAnimsRemaining,
+        tracksAfterReset,
+      };
+    });
+
+    assert.equal(restoreResult.sheetHidden, true, 'Closing visualizer should hide bottom sheet');
+    assert.equal(restoreResult.spinnerRunningAgain, true, 'Closing visualizer should unpause infinite page animations');
+    assert.equal(restoreResult.scrubAnimsRemaining, 0, 'Synthetic scrub animations should be cleaned up on close');
+    assert.equal(restoreResult.tracksAfterReset, 0, 'reset() should clear recorded tracks');
+  });
+
+  it('invokes scrollIntoView and scrollTo during the auto-record showcase so root page scroll is recorded', async () => {
+    const autoDemoResult = await page.evaluate(async () => {
+      await window.demoApp.runAutoShowcase();
+      const visualizer = document.querySelector('timeline-visualizer');
+      const globalScrollSamples = visualizer.store.globalRow.scrollSamples;
+      const globalScrollSpans = visualizer.store.globalRow.scrollSpans;
+      const maxScrollRecorded = Math.max(...globalScrollSamples.map((s) => s.scrollTop));
+
+      return {
+        isVisualizing: visualizer.isVisualizing,
+        sampleCount: globalScrollSamples.length,
+        spanCount: globalScrollSpans.length,
+        maxScrollRecorded,
+      };
+    });
+
+    assert.equal(autoDemoResult.isVisualizing, true);
+    assert.ok(autoDemoResult.sampleCount >= 2, 'Should record multiple root scroll samples during auto-showcase');
+    assert.ok(autoDemoResult.spanCount >= 1, 'Should record root scroll spans during auto-showcase');
+    assert.ok(autoDemoResult.maxScrollRecorded > 0, `Expected root scrollTop > 0 from scrollIntoView/scrollTo, got ${autoDemoResult.maxScrollRecorded}`);
+  });
+
+  it('injects a checkbox in row entries that are a scroller (checked by default) to toggle scrolling on/off per scroller', async () => {
+    const checkboxResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const scrollStage = document.getElementById('scroll-stage');
+
+      const pinnedRow = visualizer.shadowRoot.querySelector('[data-testid="pinned-global-row"]');
+      const rootCheckbox = pinnedRow?.querySelector('[data-testid="scroller-checkbox"]');
+
+      const stageRow = visualizer.shadowRoot.querySelector(
+        '[data-testid="element-row"][data-selector*="scroll-stage"]'
+      );
+      const stageCheckbox = stageRow?.querySelector('[data-testid="scroller-checkbox"]');
+
+      const nonScrollerRow = visualizer.shadowRoot.querySelector(
+        '[data-testid="element-row"][data-selector*="transition-card"]'
+      );
+      const nonScrollerCheckbox = nonScrollerRow?.querySelector('[data-testid="scroller-checkbox"]');
+
+      const rootCheckedByDefault = Boolean(rootCheckbox && rootCheckbox.checked);
+      const stageCheckedByDefault = Boolean(stageCheckbox && stageCheckbox.checked);
+      const hasCheckboxOnNonScroller = Boolean(nonScrollerCheckbox);
+
+      // Find peak scroll sample for root scroller
+      const rootSamples = visualizer.store.globalRow.scrollSamples;
+      let peakRootSample = rootSamples[0];
+      for (const s of rootSamples) {
+        if (s.scrollTop > peakRootSample.scrollTop) {
+          peakRootSample = s;
+        }
+      }
+
+      // Find peak scroll sample for #scroll-stage
+      const stageTrack = visualizer.store.getOrCreateElementTrack(scrollStage);
+      let peakStageSample = stageTrack.scrollSamples[0] || { t: 0, scrollTop: 0 };
+      for (const s of stageTrack.scrollSamples) {
+        if (s.scrollTop > peakStageSample.scrollTop) {
+          peakStageSample = s;
+        }
+      }
+
+      // 1. Scrub to t=0 with both checkboxes checked -> both scrollers at 0
+      visualizer.scrubToTime(0);
+      const rootAtZero = window.scrollY;
+      const stageAtZero = scrollStage.scrollTop;
+
+      // 2. Uncheck root scroller checkbox only, keep #scroll-stage checked
+      rootCheckbox.checked = false;
+      rootCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+      visualizer.scrubToTime(peakRootSample.t);
+      const rootWhenRootUnchecked = window.scrollY;
+      visualizer.scrubToTime(peakStageSample.t);
+      const stageWhenRootUnchecked = scrollStage.scrollTop;
+
+      // 3. Reset #scroll-stage to t=0, then uncheck #scroll-stage checkbox and re-check root scroller
+      visualizer.scrubToTime(0);
+      stageCheckbox.checked = false;
+      stageCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+      rootCheckbox.checked = true;
+      rootCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+      visualizer.scrubToTime(peakStageSample.t);
+      const stageWhenStageUnchecked = scrollStage.scrollTop;
+      visualizer.scrubToTime(peakRootSample.t);
+      const rootWhenRootCheckedAgain = window.scrollY;
+
+      // 4. Re-check #scroll-stage checkbox -> should immediately sync #scroll-stage at peakStageSample.t
+      visualizer.scrubToTime(peakStageSample.t);
+      stageCheckbox.checked = true;
+      stageCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+      const stageWhenStageCheckedAgain = scrollStage.scrollTop;
+
+      return {
+        rootCheckedByDefault,
+        stageCheckedByDefault,
+        hasCheckboxOnNonScroller,
+        rootAtZero,
+        stageAtZero,
+        rootWhenRootUnchecked,
+        stageWhenRootUnchecked,
+        stageWhenStageUnchecked,
+        rootWhenRootCheckedAgain,
+        stageWhenStageCheckedAgain,
+      };
+    });
+
+    assert.equal(checkboxResult.rootCheckedByDefault, true, 'Root scroller row checkbox should be checked by default');
+    assert.equal(checkboxResult.stageCheckedByDefault, true, 'Element scroller row checkbox should be checked by default');
+    assert.equal(checkboxResult.hasCheckboxOnNonScroller, false, 'Non-scroller element rows should not have a scroller checkbox');
+
+    assert.equal(Math.round(checkboxResult.rootAtZero), 0);
+    assert.equal(Math.round(checkboxResult.stageAtZero), 0);
+
+    assert.equal(
+      Math.round(checkboxResult.rootWhenRootUnchecked),
+      0,
+      'Unchecking root scroller row checkbox should prevent root scroller from scrolling during scrub'
+    );
+    assert.ok(
+      checkboxResult.stageWhenRootUnchecked > 0,
+      'Element scroller (#scroll-stage) should still scroll when only root scroller is unchecked'
+    );
+
+    assert.equal(
+      Math.round(checkboxResult.stageWhenStageUnchecked),
+      0,
+      'Unchecking #scroll-stage row checkbox should prevent #scroll-stage from scrolling during scrub'
+    );
+    assert.ok(
+      checkboxResult.rootWhenRootCheckedAgain > 0,
+      'Re-checking root scroller row checkbox should allow root scroller to scroll again'
+    );
+    assert.ok(
+      checkboxResult.stageWhenStageCheckedAgain > 0,
+      'Re-checking #scroll-stage row checkbox should sync and scroll #scroll-stage again'
+    );
+  });
+});
