@@ -583,7 +583,8 @@ const COMPONENT_STYLES = `
     position: relative;
     flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto;
+    overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
   }
@@ -593,9 +594,18 @@ const COMPONENT_STYLES = `
     position: sticky;
     top: 0;
     z-index: 20;
+    width: calc(var(--label-col-width) + (100% - var(--label-col-width)) * var(--timeline-zoom, 1));
+    min-width: 100%;
     background: var(--bg-pinned);
     border-bottom: 2px solid #334155;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  .timeline-body-wrapper {
+    position: relative;
+    flex: 1 0 auto;
+    width: calc(var(--label-col-width) + (100% - var(--label-col-width)) * var(--timeline-zoom, 1));
+    min-width: 100%;
   }
 
   .ruler-row {
@@ -607,6 +617,10 @@ const COMPONENT_STYLES = `
   }
 
   .ruler-corner {
+    position: sticky;
+    left: 0;
+    z-index: 15;
+    background: #090e1a;
     padding: 0 12px;
     display: flex;
     align-items: center;
@@ -669,6 +683,10 @@ const COMPONENT_STYLES = `
   }
 
   .row-header {
+    position: sticky;
+    left: 0;
+    z-index: 15;
+    background: var(--bg-panel);
     padding: 6px 10px;
     border-right: 1px solid var(--border-subtle);
     display: flex;
@@ -677,6 +695,18 @@ const COMPONENT_STYLES = `
     gap: 3px;
     min-width: 0;
     overflow: hidden;
+  }
+
+  .timeline-row:hover .row-header {
+    background: #172338;
+  }
+
+  .timeline-row.is-pinned .row-header {
+    background: var(--bg-pinned);
+  }
+
+  .timeline-row.is-removed .row-header {
+    background: #111a2e;
   }
 
   .row-title-line {
@@ -1075,7 +1105,7 @@ const COMPONENT_STYLES = `
     left: calc(var(--label-col-width) + (100% - var(--label-col-width)) * var(--playhead-ratio, 1));
     width: 2px;
     background: #f43f5e;
-    z-index: 30;
+    z-index: 10;
     pointer-events: none;
     box-shadow: 0 0 8px rgba(244, 63, 94, 0.7);
   }
@@ -1112,6 +1142,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     this.currentScrubTime = 0;
     this.dockPosition = 'bottom';
     this.playbackRate = 1;
+    this.zoomLevel = 1;
 
     this._sheetHeightPx = 400;
     this._sheetWidthPx = 620;
@@ -1495,18 +1526,6 @@ export class TimelineVisualizer extends BaseHTMLElement {
       'data-testid': 'pinned-row-container',
     });
 
-    const stickyTop = h(
-      'div',
-      { className: 'sticky-top-section' },
-      rulerRow,
-      this._pinnedRowContainer
-    );
-
-    this._elementRowsContainer = h('div', {
-      className: 'element-rows-container',
-      'data-testid': 'element-rows-container',
-    });
-
     this._playheadLine = h(
       'div',
       {
@@ -1516,6 +1535,34 @@ export class TimelineVisualizer extends BaseHTMLElement {
       h('div', { className: 'playhead-cap' })
     );
 
+    const stickyTop = h(
+      'div',
+      { className: 'sticky-top-section' },
+      rulerRow,
+      this._pinnedRowContainer,
+      this._playheadLine
+    );
+
+    this._elementRowsContainer = h('div', {
+      className: 'element-rows-container',
+      'data-testid': 'element-rows-container',
+    });
+
+    this._playheadBodyLine = h('div', {
+      className: 'playhead-line playhead-body-line',
+      'data-testid': 'playhead-body-line',
+    });
+
+    this._timelineBodyWrapper = h(
+      'div',
+      {
+        className: 'timeline-body-wrapper',
+        'data-testid': 'timeline-body-wrapper',
+      },
+      this._elementRowsContainer,
+      this._playheadBodyLine
+    );
+
     this._timelineViewport = h(
       'div',
       {
@@ -1523,9 +1570,9 @@ export class TimelineVisualizer extends BaseHTMLElement {
         'data-testid': 'timeline-viewport',
       },
       stickyTop,
-      this._elementRowsContainer,
-      this._playheadLine
+      this._timelineBodyWrapper
     );
+    this._setupTimelineZoomAndPan();
 
     this._bottomSheet = h(
       'section',
@@ -1882,7 +1929,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     if (!popup._hasVisualizerUnloadHook) {
       popup._hasVisualizerUnloadHook = true;
       popup.addEventListener('pagehide', () => {
-        if (this._isClosingPopoutProgrammatically) return;
+        if (popup._closedProgrammatically || this._isClosingPopoutProgrammatically) return;
         this._popupWindow = null;
         this.shadowRoot.appendChild(this._bottomSheet);
         this.setDockPosition('bottom');
@@ -1906,6 +1953,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
       this.shadowRoot.appendChild(this._bottomSheet);
     }
     if (this._popupWindow && !this._popupWindow.closed) {
+      this._popupWindow._closedProgrammatically = true;
       this._isClosingPopoutProgrammatically = true;
       try {
         this._popupWindow.close();
@@ -1946,6 +1994,98 @@ export class TimelineVisualizer extends BaseHTMLElement {
       activeWin.addEventListener('pointermove', onPointerMove);
       activeWin.addEventListener('pointerup', onPointerUp);
     });
+  }
+
+  _setupTimelineZoomAndPan() {
+    this._timelineViewport.addEventListener(
+      'wheel',
+      (e) => this._onTimelineWheel(e),
+      { passive: false }
+    );
+  }
+
+  _onTimelineWheel(e) {
+    if (!this._timelineViewport) return;
+
+    // 1. CMD or CTRL + Scroll up/down => ZOOM in/out on the horizontal axis ONLY
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      const rawDelta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      if (rawDelta === 0) return;
+      const clampedDelta = Math.max(-200, Math.min(200, rawDelta));
+      const factor = Math.exp(-clampedDelta * 0.003);
+      this.setZoomLevel(this.zoomLevel * factor, e.clientX);
+      return;
+    }
+
+    // 2. SHIFT + Scroll up/down => horizontal scroll
+    if (e.shiftKey) {
+      e.preventDefault();
+      const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      this._timelineViewport.scrollLeft += delta;
+      return;
+    }
+
+    // 3. Regular Scroll up/down (vertical axis) and Scroll left/right (horizontal axis)
+    e.preventDefault();
+    if (e.deltaY !== 0) {
+      this._timelineViewport.scrollTop += e.deltaY;
+    }
+    if (e.deltaX !== 0) {
+      this._timelineViewport.scrollLeft += e.deltaX;
+    }
+  }
+
+  /**
+   * Sets the horizontal zoom level of the timeline (1 = 100%, up to 20 = 2000%).
+   * Only zooms the horizontal timeline axis; vertical row heights and scrollTop are untouched.
+   *
+   * @param {number} zoom
+   * @param {number} [anchorClientX] Optional pointer clientX to anchor the zoom around
+   */
+  setZoomLevel(zoom, anchorClientX) {
+    const prevZoom = this.zoomLevel || 1;
+    let nextZoom = Math.max(1, Math.min(20, Number(zoom) || 1));
+    if (nextZoom < 1.005) {
+      nextZoom = 1;
+    }
+
+    const viewport = this._timelineViewport;
+    if (!viewport) {
+      this.zoomLevel = nextZoom;
+      return;
+    }
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const labelColWidth = this._rulerCorner?.getBoundingClientRect().width || 250;
+    const baseTrackWidth = Math.max(1, viewport.clientWidth - labelColWidth);
+
+    let cursorOffsetInTrack = baseTrackWidth / 2;
+    if (typeof anchorClientX === 'number' && anchorClientX > 0) {
+      cursorOffsetInTrack = Math.max(
+        0,
+        Math.min(baseTrackWidth, anchorClientX - viewportRect.left - labelColWidth)
+      );
+    }
+
+    const prevScrollLeft = viewport.scrollLeft;
+    this.zoomLevel = nextZoom;
+    viewport.style.setProperty('--timeline-zoom', String(nextZoom));
+
+    const prevTickBucket = Math.min(80, Math.max(10, Math.round(10 * prevZoom)));
+    const nextTickBucket = Math.min(80, Math.max(10, Math.round(10 * nextZoom)));
+    if (prevTickBucket !== nextTickBucket && this.isVisualizing) {
+      this._renderRuler();
+    }
+
+    if (nextZoom === 1) {
+      viewport.scrollLeft = 0;
+    } else {
+      const nextScrollLeft =
+        (prevScrollLeft + cursorOffsetInTrack) * (nextZoom / prevZoom) -
+        cursorOffsetInTrack;
+      viewport.scrollLeft = Math.max(0, nextScrollLeft);
+    }
   }
 
   /**
@@ -2497,6 +2637,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     }
     this.restorePageState();
     this.store.reset();
+    this.setZoomLevel(1);
     this.isVisualizing = false;
     this._bottomSheet.hidden = true;
     this._reopenSheetBtn.hidden = true;
@@ -2918,7 +3059,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
   _renderRuler() {
     this._rulerTrack.replaceChildren();
     const duration = Math.max(100, this.store.duration || 1000);
-    const tickCount = 10;
+    const tickCount = Math.min(80, Math.max(10, Math.round(10 * (this.zoomLevel || 1))));
     for (let i = 0; i <= tickCount; i++) {
       const pct = (i / tickCount) * 100;
       const ms = Math.round((i / tickCount) * duration);

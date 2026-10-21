@@ -763,5 +763,172 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
     assert.equal(speedResult.rateAfter100, 1);
     assert.deepEqual(speedResult.activeAfter100, [false, false, true]);
   });
+
+  it('supports mouse zooming (CMD/CTRL + wheel on horizontal axis only) and panning (vertical wheel, horizontal wheel, SHIFT + vertical wheel)', async () => {
+    const zoomPanResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const viewport = visualizer._timelineViewport;
+      const rulerTrack = visualizer._rulerTrack;
+      const firstRow = visualizer.shadowRoot.querySelector('.timeline-row');
+
+      // Make sheet short enough that rows overflow vertically so vertical scroll can be tested
+      visualizer.setSheetHeight(210);
+      viewport.scrollTop = 0;
+      viewport.scrollLeft = 0;
+      visualizer.setZoomLevel(1);
+
+      const initialZoom = visualizer.zoomLevel;
+      const initialTrackWidth = rulerTrack.getBoundingClientRect().width;
+      const initialRowHeight = firstRow.getBoundingClientRect().height;
+
+      // 1. Regular vertical scroll (Scroll up/down -> scrollTop changes, scrollLeft stays 0)
+      viewport.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: 60, deltaX: 0, bubbles: true, cancelable: true })
+      );
+      const scrollTopAfterVerticalWheel = viewport.scrollTop;
+      const scrollLeftAfterVerticalWheel = viewport.scrollLeft;
+
+      // 2. CMD / CTRL + Scroll up -> zoom in horizontally ONLY (row height and scrollTop stay unchanged)
+      viewport.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: -180,
+          ctrlKey: true,
+          clientX: 600,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      const zoomAfterCtrlWheelUp = visualizer.zoomLevel;
+      const zoomedTrackWidth = rulerTrack.getBoundingClientRect().width;
+      const rowHeightAfterZoom = firstRow.getBoundingClientRect().height;
+      const scrollTopAfterZoom = viewport.scrollTop;
+
+      // Also test metaKey (CMD on macOS) zooming in further
+      viewport.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: -120,
+          metaKey: true,
+          clientX: 600,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      const zoomAfterMetaWheelUp = visualizer.zoomLevel;
+
+      // 3. SHIFT + Scroll up/down -> horizontal scroll (scrollLeft changes, scrollTop stays unchanged)
+      viewport.scrollLeft = 10;
+      const scrollLeftBeforeShift = viewport.scrollLeft;
+      viewport.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: 80,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      const scrollLeftAfterShiftWheel = viewport.scrollLeft;
+      const scrollTopAfterShiftWheel = viewport.scrollTop;
+
+      // 4. Regular horizontal scroll (Scroll left/right -> scrollLeft changes)
+      viewport.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaX: 50,
+          deltaY: 0,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      const scrollLeftAfterHorizontalWheel = viewport.scrollLeft;
+
+      // 5. CMD / CTRL + Scroll down -> zoom back out
+      viewport.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: 200,
+          ctrlKey: true,
+          clientX: 600,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      const zoomAfterCtrlWheelDown = visualizer.zoomLevel;
+
+      // Reset back to default height and zoom
+      visualizer.setZoomLevel(1);
+      visualizer.setSheetHeight(400);
+
+      return {
+        initialZoom,
+        initialTrackWidth: Math.round(initialTrackWidth),
+        initialRowHeight: Math.round(initialRowHeight),
+        scrollTopAfterVerticalWheel: Math.round(scrollTopAfterVerticalWheel),
+        scrollLeftAfterVerticalWheel: Math.round(scrollLeftAfterVerticalWheel),
+        zoomAfterCtrlWheelUp,
+        zoomedTrackWidth: Math.round(zoomedTrackWidth),
+        rowHeightAfterZoom: Math.round(rowHeightAfterZoom),
+        scrollTopAfterZoom: Math.round(scrollTopAfterZoom),
+        zoomAfterMetaWheelUp,
+        scrollLeftBeforeShift: Math.round(scrollLeftBeforeShift),
+        scrollLeftAfterShiftWheel: Math.round(scrollLeftAfterShiftWheel),
+        scrollTopAfterShiftWheel: Math.round(scrollTopAfterShiftWheel),
+        scrollLeftAfterHorizontalWheel: Math.round(scrollLeftAfterHorizontalWheel),
+        zoomAfterCtrlWheelDown,
+      };
+    });
+
+    assert.equal(zoomPanResult.initialZoom, 1);
+    assert.ok(
+      zoomPanResult.scrollTopAfterVerticalWheel > 0,
+      'Vertical wheel should scroll timeline vertically (scrollTop > 0)'
+    );
+    assert.equal(
+      zoomPanResult.scrollLeftAfterVerticalWheel,
+      0,
+      'Vertical wheel without modifiers should not scroll horizontally'
+    );
+
+    assert.ok(
+      zoomPanResult.zoomAfterCtrlWheelUp > 1,
+      'CTRL + wheel up should increase horizontal zoomLevel'
+    );
+    assert.ok(
+      zoomPanResult.zoomedTrackWidth > zoomPanResult.initialTrackWidth,
+      'Horizontal track width should increase when zoomed in'
+    );
+    assert.equal(
+      zoomPanResult.rowHeightAfterZoom,
+      zoomPanResult.initialRowHeight,
+      'Vertical row height should NOT change when zooming horizontally'
+    );
+    assert.equal(
+      zoomPanResult.scrollTopAfterZoom,
+      zoomPanResult.scrollTopAfterVerticalWheel,
+      'Vertical scrollTop should NOT change during horizontal zoom'
+    );
+    assert.ok(
+      zoomPanResult.zoomAfterMetaWheelUp > zoomPanResult.zoomAfterCtrlWheelUp,
+      'CMD (metaKey) + wheel up should also increase horizontal zoomLevel'
+    );
+
+    assert.ok(
+      zoomPanResult.scrollLeftAfterShiftWheel > zoomPanResult.scrollLeftBeforeShift,
+      'SHIFT + vertical wheel should scroll horizontally (increase scrollLeft)'
+    );
+    assert.equal(
+      zoomPanResult.scrollTopAfterShiftWheel,
+      zoomPanResult.scrollTopAfterZoom,
+      'SHIFT + vertical wheel should not change vertical scrollTop'
+    );
+
+    assert.ok(
+      zoomPanResult.scrollLeftAfterHorizontalWheel > zoomPanResult.scrollLeftAfterShiftWheel,
+      'Horizontal wheel (deltaX) should scroll horizontally'
+    );
+
+    assert.ok(
+      zoomPanResult.zoomAfterCtrlWheelDown < zoomPanResult.zoomAfterMetaWheelUp,
+      'CTRL + wheel down should zoom back out'
+    );
+  });
 });
+
 
