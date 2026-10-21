@@ -21,12 +21,18 @@ import {
 const COMPONENT_STYLES = `
   :host {
     all: initial;
+  }
+
+  :host,
+  .bottom-sheet,
+  .recorder-floating-bar {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 13px;
     line-height: 1.4;
     color: #e2e8f0;
     box-sizing: border-box;
     --sheet-height: 400px;
+    --sheet-width: 620px;
     --label-col-width: 250px;
     --bg-panel: #0f172a;
     --bg-panel-elevated: #1e293b;
@@ -184,7 +190,7 @@ const COMPONENT_STYLES = `
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   }
 
-  /* Collapsible / Resizable Bottom Sheet */
+  /* Collapsible / Resizable Visualizer Panel (Bottom, Right, or Popout) */
   .bottom-sheet {
     position: fixed;
     left: 0;
@@ -207,7 +213,50 @@ const COMPONENT_STYLES = `
     display: none !important;
   }
 
-  .bottom-sheet.is-collapsed {
+  .bottom-sheet.dock-left {
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: auto;
+    width: var(--sheet-width, 620px);
+    min-width: 360px;
+    max-width: 92vw;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-top: none;
+    border-right: 1px solid var(--border-subtle);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.55);
+    padding-right: 7px;
+  }
+
+  .bottom-sheet.dock-right {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: var(--sheet-width, 620px);
+    min-width: 360px;
+    max-width: 92vw;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-top: none;
+    border-left: 1px solid var(--border-subtle);
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.55);
+    padding-left: 7px;
+  }
+
+  .bottom-sheet.dock-popout {
+    position: fixed;
+    inset: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    border: none;
+    box-shadow: none;
+  }
+
+  .bottom-sheet.dock-bottom.is-collapsed {
     height: 46px !important;
     min-height: 46px !important;
     overflow: hidden;
@@ -224,6 +273,10 @@ const COMPONENT_STYLES = `
     flex-shrink: 0;
   }
 
+  .resize-handle[hidden] {
+    display: none !important;
+  }
+
   .resize-handle::after {
     content: "";
     width: 44px;
@@ -236,13 +289,42 @@ const COMPONENT_STYLES = `
     background: #38bdf8;
   }
 
+  .bottom-sheet.dock-left .resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    width: 7px;
+    height: 100%;
+    cursor: ew-resize;
+    background: linear-gradient(to left, rgba(56, 189, 248, 0.25), transparent);
+  }
+
+  .bottom-sheet.dock-right .resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 7px;
+    height: 100%;
+    cursor: ew-resize;
+    background: linear-gradient(to right, rgba(56, 189, 248, 0.25), transparent);
+  }
+
+  .bottom-sheet.dock-left .resize-handle::after,
+  .bottom-sheet.dock-right .resize-handle::after {
+    width: 3px;
+    height: 44px;
+  }
+
   /* Sheet Header / Toolbar */
   .sheet-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 6px 14px;
+    gap: 8px;
+    padding: 6px 12px;
     background: var(--bg-panel-elevated);
     border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
@@ -254,7 +336,8 @@ const COMPONENT_STYLES = `
   .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
   .toolbar-title {
@@ -286,6 +369,89 @@ const COMPONENT_STYLES = `
     border: 1px solid var(--border-subtle);
   }
 
+  /* Docking Position Icon Chooser */
+  .dock-chooser {
+    display: inline-flex;
+    align-items: center;
+    background: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 6px;
+    position: relative;
+  }
+
+  .dock-btn {
+    position: relative;
+    appearance: none;
+    border: none;
+    border-right: 1px solid rgba(148, 163, 184, 0.2);
+    background: transparent;
+    color: #94a3b8;
+    font-family: inherit;
+    padding: 5px 7px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .dock-btn:first-child {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+  }
+
+  .dock-btn:last-child {
+    border-right: none;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+  }
+
+  .dock-btn svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+    pointer-events: none;
+  }
+
+  .dock-btn:hover {
+    background: rgba(51, 65, 85, 0.65);
+    color: #f8fafc;
+  }
+
+  .dock-btn.is-active {
+    background: rgba(56, 189, 248, 0.2);
+    color: #38bdf8;
+  }
+
+  .dock-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-2px);
+    background: #020617;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
+    z-index: 2147483647;
+  }
+
+  .dock-btn:hover::after,
+  .dock-btn:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+  }
+
   .icon-btn {
     appearance: none;
     border: 1px solid rgba(148, 163, 184, 0.25);
@@ -302,6 +468,10 @@ const COMPONENT_STYLES = `
     gap: 4px;
   }
 
+  .icon-btn[hidden] {
+    display: none !important;
+  }
+
   .icon-btn:hover {
     background: #334155;
     color: #ffffff;
@@ -314,7 +484,7 @@ const COMPONENT_STYLES = `
   }
 
   .scrubber-slider {
-    width: 180px;
+    width: 136px;
     accent-color: #38bdf8;
     cursor: pointer;
   }
@@ -323,7 +493,7 @@ const COMPONENT_STYLES = `
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 12px;
     color: #38bdf8;
-    min-width: 128px;
+    min-width: 112px;
     text-align: right;
   }
 
@@ -901,6 +1071,12 @@ export class TimelineVisualizer extends BaseHTMLElement {
     this.isVisualizing = false;
     this.isCollapsed = false;
     this.currentScrubTime = 0;
+    this.dockPosition = 'bottom';
+
+    this._sheetHeightPx = 400;
+    this._sheetWidthPx = 620;
+    this._popupWindow = null;
+    this._isClosingPopoutProgrammatically = false;
 
     this._isScrubbing = false;
     this._rafId = null;
@@ -938,6 +1114,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     if (this.isRecording) {
       this._detachRecordingListeners();
     }
+    this._closePopoutWindow();
     this.restorePageState();
   }
 
@@ -1008,7 +1185,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
       className: 'resize-handle',
       part: 'resize-handle',
       'data-testid': 'resize-handle',
-      title: 'Drag to resize timeline bottom sheet',
+      title: 'Drag to resize timeline panel',
     });
     this._setupResizeHandle();
 
@@ -1052,13 +1229,92 @@ export class TimelineVisualizer extends BaseHTMLElement {
       textContent: '0 ms / 0 ms',
     });
 
+    // Docking Position Icon-Only Chooser: left | bottom | right | popout
+    this._dockBtnLeft = h(
+      'button',
+      {
+        type: 'button',
+        className: 'dock-btn',
+        'data-testid': 'dock-btn-left',
+        'data-dock': 'left',
+        'data-tooltip': 'Dock to left',
+        'aria-label': 'Dock to left',
+        'aria-pressed': 'false',
+        title: 'Dock to left',
+        onClick: () => this.setDockPosition('left'),
+      },
+      this._createDockIcon('left')
+    );
+
+    this._dockBtnBottom = h(
+      'button',
+      {
+        type: 'button',
+        className: 'dock-btn is-active',
+        'data-testid': 'dock-btn-bottom',
+        'data-dock': 'bottom',
+        'data-tooltip': 'Dock to bottom',
+        'aria-label': 'Dock to bottom',
+        'aria-pressed': 'true',
+        title: 'Dock to bottom',
+        onClick: () => this.setDockPosition('bottom'),
+      },
+      this._createDockIcon('bottom')
+    );
+
+    this._dockBtnRight = h(
+      'button',
+      {
+        type: 'button',
+        className: 'dock-btn',
+        'data-testid': 'dock-btn-right',
+        'data-dock': 'right',
+        'data-tooltip': 'Dock to right',
+        'aria-label': 'Dock to right',
+        'aria-pressed': 'false',
+        title: 'Dock to right',
+        onClick: () => this.setDockPosition('right'),
+      },
+      this._createDockIcon('right')
+    );
+
+    this._dockBtnPopout = h(
+      'button',
+      {
+        type: 'button',
+        className: 'dock-btn',
+        'data-testid': 'dock-btn-popout',
+        'data-dock': 'popout',
+        'data-tooltip': 'Pop out into window',
+        'aria-label': 'Pop out into window',
+        'aria-pressed': 'false',
+        title: 'Pop out into window',
+        onClick: () => this.setDockPosition('popout'),
+      },
+      this._createDockIcon('popout')
+    );
+
+    this._dockChooser = h(
+      'div',
+      {
+        className: 'dock-chooser',
+        role: 'group',
+        'aria-label': 'Docking position',
+        'data-testid': 'dock-chooser',
+      },
+      this._dockBtnLeft,
+      this._dockBtnBottom,
+      this._dockBtnRight,
+      this._dockBtnPopout
+    );
+
     this._collapseBtn = h(
       'button',
       {
         type: 'button',
         className: 'icon-btn',
         'data-testid': 'collapse-btn',
-        title: 'Collapse or expand bottom sheet',
+        title: 'Collapse or expand panel',
         onClick: () => this.toggleCollapse(),
       },
       '▾ Collapse'
@@ -1111,6 +1367,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
       h(
         'div',
         { className: 'toolbar-right' },
+        this._dockChooser,
         this._collapseBtn,
         this._resetBtn,
         this._closeBtn
@@ -1173,9 +1430,10 @@ export class TimelineVisualizer extends BaseHTMLElement {
     this._bottomSheet = h(
       'section',
       {
-        className: 'bottom-sheet',
+        className: 'bottom-sheet dock-bottom',
         part: 'bottom-sheet',
         'data-testid': 'bottom-sheet',
+        'data-dock': 'bottom',
         'aria-label': 'Recorded timeline visualizer',
         hidden: true,
       },
@@ -1190,6 +1448,113 @@ export class TimelineVisualizer extends BaseHTMLElement {
       this._floatingBar,
       this._highlightOverlay,
       this._bottomSheet
+    );
+  }
+
+  _createDockIcon(mode) {
+    if (mode === 'left') {
+      return svg(
+        'svg',
+        { viewBox: '0 0 16 16', 'aria-hidden': 'true' },
+        svg('rect', {
+          x: '1.5',
+          y: '2.5',
+          width: '13',
+          height: '11',
+          rx: '1.5',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '1.3',
+        }),
+        svg('rect', {
+          x: '2',
+          y: '3',
+          width: '4.5',
+          height: '10',
+          rx: '0.5',
+          fill: 'currentColor',
+        })
+      );
+    }
+
+    if (mode === 'right') {
+      return svg(
+        'svg',
+        { viewBox: '0 0 16 16', 'aria-hidden': 'true' },
+        svg('rect', {
+          x: '1.5',
+          y: '2.5',
+          width: '13',
+          height: '11',
+          rx: '1.5',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '1.3',
+        }),
+        svg('rect', {
+          x: '9.5',
+          y: '3',
+          width: '4.5',
+          height: '10',
+          rx: '0.5',
+          fill: 'currentColor',
+        })
+      );
+    }
+
+    if (mode === 'popout') {
+      return svg(
+        'svg',
+        { viewBox: '0 0 16 16', 'aria-hidden': 'true' },
+        svg('path', {
+          d: 'M5 4.5H2.8C2.08 4.5 1.5 5.08 1.5 5.8v6.4c0 .72.58 1.3 1.3 1.3h7.4c.72 0 1.3-.58 1.3-1.3V10',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '1.3',
+          'stroke-linecap': 'round',
+        }),
+        svg('rect', {
+          x: '6',
+          y: '2',
+          width: '8.5',
+          height: '6.5',
+          rx: '1.2',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '1.3',
+        }),
+        svg('rect', {
+          x: '6.5',
+          y: '2.5',
+          width: '7.5',
+          height: '2',
+          fill: 'currentColor',
+        })
+      );
+    }
+
+    // Default: 'bottom'
+    return svg(
+      'svg',
+      { viewBox: '0 0 16 16', 'aria-hidden': 'true' },
+      svg('rect', {
+        x: '1.5',
+        y: '2.5',
+        width: '13',
+        height: '11',
+        rx: '1.5',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '1.3',
+      }),
+      svg('rect', {
+        x: '2',
+        y: '9',
+        width: '12',
+        height: '4',
+        rx: '0.5',
+        fill: 'currentColor',
+      })
     );
   }
 
@@ -1239,14 +1604,28 @@ export class TimelineVisualizer extends BaseHTMLElement {
   }
 
   _setupResizeHandle() {
+    let startX = 0;
     let startY = 0;
+    let startWidth = 620;
     let startHeight = 400;
 
     const onPointerMove = (e) => {
-      const deltaY = startY - e.clientY;
-      const maxH = Math.floor(window.innerHeight * 0.88);
-      const nextHeight = Math.max(160, Math.min(maxH, startHeight + deltaY));
-      this.setSheetHeight(nextHeight);
+      if (this.dockPosition === 'right') {
+        const deltaX = startX - e.clientX;
+        const maxW = Math.floor(window.innerWidth * 0.9);
+        const nextWidth = Math.max(360, Math.min(maxW, startWidth + deltaX));
+        this.setSheetWidth(nextWidth);
+      } else if (this.dockPosition === 'left') {
+        const deltaX = e.clientX - startX;
+        const maxW = Math.floor(window.innerWidth * 0.9);
+        const nextWidth = Math.max(360, Math.min(maxW, startWidth + deltaX));
+        this.setSheetWidth(nextWidth);
+      } else {
+        const deltaY = startY - e.clientY;
+        const maxH = Math.floor(window.innerHeight * 0.88);
+        const nextHeight = Math.max(160, Math.min(maxH, startHeight + deltaY));
+        this.setSheetHeight(nextHeight);
+      }
     };
 
     const onPointerUp = () => {
@@ -1259,25 +1638,189 @@ export class TimelineVisualizer extends BaseHTMLElement {
       if (this.isCollapsed) {
         this.toggleCollapse(false);
       }
+      const rect = this._bottomSheet.getBoundingClientRect();
+      startX = e.clientX;
       startY = e.clientY;
-      startHeight = this._bottomSheet.getBoundingClientRect().height || 400;
+      startWidth = rect.width || this._sheetWidthPx || 620;
+      startHeight = rect.height || this._sheetHeightPx || 400;
       window.addEventListener('pointermove', onPointerMove);
       window.addEventListener('pointerup', onPointerUp);
     });
   }
 
   /**
-   * Sets the bottom sheet height in pixels.
+   * Sets the bottom sheet height in pixels (used when docked to bottom).
    *
    * @param {number} heightPx
    */
   setSheetHeight(heightPx) {
     const clamped = Math.max(160, Math.min(Math.floor(window.innerHeight * 0.88), Number(heightPx) || 400));
+    this._sheetHeightPx = clamped;
     this.style.setProperty('--sheet-height', `${clamped}px`);
-    this._bottomSheet.style.height = `${clamped}px`;
+    if (this.dockPosition === 'bottom') {
+      this._bottomSheet.style.height = `${clamped}px`;
+    }
+  }
+
+  /**
+   * Sets the side-docked sheet width in pixels (used when docked to left or right).
+   *
+   * @param {number} widthPx
+   */
+  setSheetWidth(widthPx) {
+    const clamped = Math.max(360, Math.min(Math.floor(window.innerWidth * 0.9), Number(widthPx) || 620));
+    this._sheetWidthPx = clamped;
+    this.style.setProperty('--sheet-width', `${clamped}px`);
+    if (this.dockPosition === 'right' || this.dockPosition === 'left') {
+      this._bottomSheet.style.width = `${clamped}px`;
+    }
+  }
+
+  /**
+   * Sets the docking position of the visualizer panel: 'left', 'bottom', 'right', or 'popout'.
+   *
+   * @param {'left' | 'bottom' | 'right' | 'popout'} position
+   */
+  setDockPosition(position) {
+    const valid =
+      position === 'left' || position === 'right' || position === 'popout'
+        ? position
+        : 'bottom';
+    this.dockPosition = valid;
+
+    const buttons = [
+      [this._dockBtnLeft, 'left'],
+      [this._dockBtnBottom, 'bottom'],
+      [this._dockBtnRight, 'right'],
+      [this._dockBtnPopout, 'popout'],
+    ];
+    for (const [btn, mode] of buttons) {
+      if (!btn) continue;
+      const active = mode === valid;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+
+    this._bottomSheet.classList.toggle('dock-left', valid === 'left');
+    this._bottomSheet.classList.toggle('dock-bottom', valid === 'bottom');
+    this._bottomSheet.classList.toggle('dock-right', valid === 'right');
+    this._bottomSheet.classList.toggle('dock-popout', valid === 'popout');
+    this._bottomSheet.setAttribute('data-dock', valid);
+
+    if (valid !== 'bottom' && this.isCollapsed) {
+      this.toggleCollapse(false);
+    }
+    this._collapseBtn.hidden = valid !== 'bottom';
+
+    if (valid === 'popout') {
+      this._resizeHandle.hidden = true;
+      this._bottomSheet.style.height = '';
+      this._bottomSheet.style.width = '';
+      if (this.isVisualizing || !this._bottomSheet.hidden) {
+        this._openInPopoutWindow();
+      }
+      return;
+    }
+
+    this._closePopoutWindow();
+    if (this._bottomSheet.parentNode !== this.shadowRoot) {
+      this.shadowRoot.appendChild(this._bottomSheet);
+    }
+    this._resizeHandle.hidden = false;
+
+    if (valid === 'right' || valid === 'left') {
+      this._bottomSheet.style.height = '';
+      this.setSheetWidth(this._sheetWidthPx);
+    } else {
+      this._bottomSheet.style.width = '';
+      this.setSheetHeight(this._sheetHeightPx);
+    }
+  }
+
+  _openInPopoutWindow() {
+    let popup = this._popupWindow;
+    if (!popup || popup.closed) {
+      popup = window.open(
+        '',
+        'timeline-visualizer-popout',
+        'popup=yes,width=980,height=520'
+      );
+      this._popupWindow = popup;
+    }
+
+    if (!popup || !popup.document) {
+      this.setDockPosition('bottom');
+      return null;
+    }
+
+    const popDoc = popup.document;
+    popDoc.title = 'Timeline Visualizer';
+
+    if (!popDoc.getElementById('timeline-visualizer-popout-styles')) {
+      const popStyle = popDoc.createElement('style');
+      popStyle.id = 'timeline-visualizer-popout-styles';
+      popStyle.textContent = `
+        html, body {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          height: 100%;
+          background: #0f172a;
+          color: #f8fafc;
+          overflow: hidden;
+        }
+        ${COMPONENT_STYLES}
+      `;
+      (popDoc.head || popDoc.documentElement).appendChild(popStyle);
+    }
+
+    this._bottomSheet.hidden = false;
+    if (this._bottomSheet.parentNode !== popDoc.body) {
+      popDoc.body.replaceChildren(this._bottomSheet);
+    }
+
+    if (!popup._hasVisualizerUnloadHook) {
+      popup._hasVisualizerUnloadHook = true;
+      popup.addEventListener('pagehide', () => {
+        if (this._isClosingPopoutProgrammatically) return;
+        this._popupWindow = null;
+        this.shadowRoot.appendChild(this._bottomSheet);
+        this.setDockPosition('bottom');
+        if (this.isVisualizing) {
+          this.closeVisualizer();
+        }
+      });
+    }
+
+    try {
+      popup.focus();
+    } catch {
+      // Ignore focus restrictions
+    }
+
+    return popup;
+  }
+
+  _closePopoutWindow() {
+    if (this._bottomSheet && this._bottomSheet.parentNode !== this.shadowRoot) {
+      this.shadowRoot.appendChild(this._bottomSheet);
+    }
+    if (this._popupWindow && !this._popupWindow.closed) {
+      this._isClosingPopoutProgrammatically = true;
+      try {
+        this._popupWindow.close();
+      } catch {
+        // Ignore close errors
+      } finally {
+        this._isClosingPopoutProgrammatically = false;
+      }
+    }
+    this._popupWindow = null;
   }
 
   _setupTrackScrubbing(trackEl) {
+    let activeWin = window;
+
     const scrubFromPointer = (clientX) => {
       const rect = trackEl.getBoundingClientRect();
       if (rect.width <= 0) return;
@@ -1292,25 +1835,29 @@ export class TimelineVisualizer extends BaseHTMLElement {
     };
 
     const onPointerUp = () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
+      activeWin.removeEventListener('pointermove', onPointerMove);
+      activeWin.removeEventListener('pointerup', onPointerUp);
     };
 
     trackEl.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      activeWin = trackEl.ownerDocument?.defaultView || window;
       scrubFromPointer(e.clientX);
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', onPointerUp);
+      activeWin.addEventListener('pointermove', onPointerMove);
+      activeWin.addEventListener('pointerup', onPointerUp);
     });
   }
 
   /**
-   * Checks whether a DOM node is part of `<timeline-visualizer>` or its Shadow DOM.
+   * Checks whether a DOM node is part of `<timeline-visualizer>` or its Shadow DOM / Popout window.
    *
    * @param {Node|EventTarget|null} node
    * @returns {boolean}
    */
   isOwnNode(node) {
+    if (this._bottomSheet && node instanceof Node && this._bottomSheet.contains(node)) {
+      return true;
+    }
     return isElementInRecorder(node, this, this.shadowRoot);
   }
 
@@ -1333,6 +1880,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
 
     // If visualizing a previous recording, unpause and restore page first
     this._stopTimelineReplay();
+    this._closePopoutWindow();
     this.restorePageState();
     this._bottomSheet.hidden = true;
     this._reopenSheetBtn.hidden = true;
@@ -1806,6 +2354,10 @@ export class TimelineVisualizer extends BaseHTMLElement {
     this._bottomSheet.hidden = false;
     this._reopenSheetBtn.hidden = true;
 
+    if (this.dockPosition === 'popout') {
+      this._openInPopoutWindow();
+    }
+
     this._pauseAllPageAnimations();
 
     const duration = Math.max(1, Math.round(this.store.duration || 1000));
@@ -1822,6 +2374,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
    */
   closeVisualizer() {
     this._stopTimelineReplay();
+    this._closePopoutWindow();
     this.restorePageState();
     this.isVisualizing = false;
     this._bottomSheet.hidden = true;
@@ -1837,6 +2390,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
    */
   reset() {
     this._stopTimelineReplay();
+    this._closePopoutWindow();
     if (this.isRecording) {
       this._detachRecordingListeners();
       this.isRecording = false;
@@ -1852,12 +2406,13 @@ export class TimelineVisualizer extends BaseHTMLElement {
   }
 
   /**
-   * Toggles the collapsed state of the bottom sheet.
+   * Toggles the collapsed state of the bottom sheet (only allowed when docked to the bottom).
    *
    * @param {boolean} [forceState]
    */
   toggleCollapse(forceState) {
-    this.isCollapsed = typeof forceState === 'boolean' ? forceState : !this.isCollapsed;
+    const requested = typeof forceState === 'boolean' ? forceState : !this.isCollapsed;
+    this.isCollapsed = this.dockPosition === 'bottom' ? requested : false;
     this._bottomSheet.classList.toggle('is-collapsed', this.isCollapsed);
     this._collapseBtn.textContent = this.isCollapsed ? '▴ Expand' : '▾ Collapse';
   }

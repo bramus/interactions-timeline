@@ -91,11 +91,13 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       const sheet = el.shadowRoot.querySelector('[data-testid="bottom-sheet"]');
       const barRect = floatingBar.getBoundingClientRect();
       const barStyle = window.getComputedStyle(floatingBar);
+      const recBtnStyle = window.getComputedStyle(recBtn);
 
       return {
         hasShadowRoot: Boolean(el.shadowRoot),
         hasRecBtn: Boolean(recBtn),
         recBtnText: recBtn.textContent.trim(),
+        recBtnFontFamily: recBtnStyle.fontFamily,
         position: barStyle.position,
         top: barRect.top,
         rightDistance: window.innerWidth - barRect.right,
@@ -107,6 +109,10 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
     assert.equal(info.hasShadowRoot, true);
     assert.equal(info.hasRecBtn, true);
     assert.equal(info.recBtnText, 'Start Recording');
+    assert.ok(
+      info.recBtnFontFamily.includes('system-ui') && !info.recBtnFontFamily.toLowerCase().includes('times'),
+      `Expected system-ui sans-serif font on record button, got: ${info.recBtnFontFamily}`
+    );
     assert.equal(info.position, 'fixed');
     assert.ok(info.top <= 30, `Expected top-right button near top, got top=${info.top}`);
     assert.ok(info.rightDistance <= 30, `Expected top-right button near right, got rightDistance=${info.rightDistance}`);
@@ -538,4 +544,157 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       'Re-checking #scroll-stage row checkbox should sync and scroll #scroll-stage again'
     );
   });
+
+  it('supports switching docking position via the icon-only chooser: left, bottom, right, and popout', async () => {
+    const dockResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const sheet = visualizer._bottomSheet;
+      const btnLeft = visualizer._dockBtnLeft;
+      const btnBottom = visualizer._dockBtnBottom;
+      const btnRight = visualizer._dockBtnRight;
+      const btnPopout = visualizer._dockBtnPopout;
+      const allBtns = [btnLeft, btnBottom, btnRight, btnPopout];
+
+      const buttonsAreIconOnlyWithTooltips = allBtns.every(
+        (btn) =>
+          Boolean(btn) &&
+          btn.textContent.trim() === '' &&
+          Boolean(btn.querySelector('svg')) &&
+          Boolean(btn.getAttribute('data-tooltip')) &&
+          Boolean(btn.getAttribute('title'))
+      );
+
+      const defaultDock = visualizer.dockPosition;
+      const defaultHasBottomClass = sheet.classList.contains('dock-bottom');
+      const collapseVisibleInBottom = !visualizer._collapseBtn.hidden;
+
+      // Collapse while docked to bottom, then switch to 'left' -> should auto-expand and hide collapse button
+      visualizer.toggleCollapse(true);
+      const collapsedInBottom = visualizer.isCollapsed;
+
+      // 1. Switch to 'left' dock
+      btnLeft.click();
+      visualizer.setSheetWidth(500);
+      const leftDock = visualizer.dockPosition;
+      const leftRect = sheet.getBoundingClientRect();
+      const leftHasClass = sheet.classList.contains('dock-left');
+      const collapseHiddenInLeft = visualizer._collapseBtn.hidden;
+      const uncollapsedOnSwitchToLeft = !visualizer.isCollapsed;
+      visualizer.toggleCollapse(true);
+      const collapseBlockedInLeft = !visualizer.isCollapsed;
+
+      // 2. Switch to 'right' dock
+      btnRight.click();
+      visualizer.setSheetWidth(540);
+      const rightDock = visualizer.dockPosition;
+      const rightRect = sheet.getBoundingClientRect();
+      const rightHasClass = sheet.classList.contains('dock-right');
+      const collapseHiddenInRight = visualizer._collapseBtn.hidden;
+      visualizer.toggleCollapse(true);
+      const collapseBlockedInRight = !visualizer.isCollapsed;
+
+      // 3. Switch to 'popout' dock -> opens popup window and moves visualizer panel into popup document
+      btnPopout.click();
+      const popoutDock = visualizer.dockPosition;
+      const popupWin = visualizer._popupWindow;
+      const hasPopupWindow = Boolean(popupWin && !popupWin.closed && popupWin.document);
+      const sheetInPopup = hasPopupWindow ? popupWin.document.body.contains(sheet) : false;
+      const collapseHiddenInPopout = visualizer._collapseBtn.hidden;
+
+      // Scrub using the slider inside the popup window to t = 0 and verify main page updates
+      const popSlider = popupWin.document.querySelector('[data-testid="scrubber-slider"]');
+      popSlider.value = '0';
+      popSlider.dispatchEvent(new Event('input', { bubbles: true }));
+      const mainWindowScrollAtZeroFromPopup = window.scrollY;
+
+      // 4. Switch back to 'bottom' dock from inside the popup window
+      btnBottom.click();
+      const returnedDock = visualizer.dockPosition;
+      const sheetBackInShadow = visualizer.shadowRoot.contains(sheet);
+      const popupClosedAfterReturn = !visualizer._popupWindow || visualizer._popupWindow.closed;
+      const collapseVisibleAgainInBottom = !visualizer._collapseBtn.hidden;
+
+      return {
+        buttonsAreIconOnlyWithTooltips,
+        tooltips: allBtns.map((btn) => btn.getAttribute('data-tooltip')),
+        defaultDock,
+        defaultHasBottomClass,
+        collapseVisibleInBottom,
+        collapsedInBottom,
+        leftDock,
+        leftHasClass,
+        leftX: Math.round(leftRect.left),
+        leftWidth: Math.round(leftRect.width),
+        leftHeight: Math.round(leftRect.height),
+        collapseHiddenInLeft,
+        uncollapsedOnSwitchToLeft,
+        collapseBlockedInLeft,
+        rightDock,
+        rightHasClass,
+        rightWidth: Math.round(rightRect.width),
+        rightHeight: Math.round(rightRect.height),
+        collapseHiddenInRight,
+        collapseBlockedInRight,
+        viewportHeight: window.innerHeight,
+        popoutDock,
+        hasPopupWindow,
+        sheetInPopup,
+        collapseHiddenInPopout,
+        mainWindowScrollAtZeroFromPopup,
+        returnedDock,
+        sheetBackInShadow,
+        popupClosedAfterReturn,
+        collapseVisibleAgainInBottom,
+      };
+    });
+
+    assert.equal(
+      dockResult.buttonsAreIconOnlyWithTooltips,
+      true,
+      'All 4 docking buttons should be icon-only with SVG icons and hover tooltips'
+    );
+    assert.deepEqual(dockResult.tooltips, [
+      'Dock to left',
+      'Dock to bottom',
+      'Dock to right',
+      'Pop out into window',
+    ]);
+
+    assert.equal(dockResult.defaultDock, 'bottom');
+    assert.equal(dockResult.defaultHasBottomClass, true);
+    assert.equal(dockResult.collapseVisibleInBottom, true);
+    assert.equal(dockResult.collapsedInBottom, true);
+
+    assert.equal(dockResult.leftDock, 'left');
+    assert.equal(dockResult.leftHasClass, true);
+    assert.equal(dockResult.leftX, 0);
+    assert.equal(dockResult.leftWidth, 500);
+    assert.equal(dockResult.leftHeight, dockResult.viewportHeight);
+    assert.equal(dockResult.collapseHiddenInLeft, true, 'Collapse button should be hidden when docked to left');
+    assert.equal(dockResult.uncollapsedOnSwitchToLeft, true, 'Switching from bottom to left should uncollapse panel');
+    assert.equal(dockResult.collapseBlockedInLeft, true, 'Collapsing should not be allowed when docked to left');
+
+    assert.equal(dockResult.rightDock, 'right');
+    assert.equal(dockResult.rightHasClass, true);
+    assert.equal(dockResult.rightWidth, 540);
+    assert.equal(dockResult.rightHeight, dockResult.viewportHeight);
+    assert.equal(dockResult.collapseHiddenInRight, true, 'Collapse button should be hidden when docked to right');
+    assert.equal(dockResult.collapseBlockedInRight, true, 'Collapsing should not be allowed when docked to right');
+
+    assert.equal(dockResult.popoutDock, 'popout');
+    assert.equal(dockResult.hasPopupWindow, true, 'Popout mode should create a popup window');
+    assert.equal(dockResult.sheetInPopup, true, 'Visualizer panel should be mounted inside the popup document body');
+    assert.equal(dockResult.collapseHiddenInPopout, true, 'Collapse button should be hidden in popout mode');
+    assert.equal(
+      Math.round(dockResult.mainWindowScrollAtZeroFromPopup),
+      0,
+      'Scrubbing inside the popout window should scrub the main page'
+    );
+
+    assert.equal(dockResult.returnedDock, 'bottom');
+    assert.equal(dockResult.sheetBackInShadow, true, 'Docking back to bottom should return panel to main Shadow DOM');
+    assert.equal(dockResult.popupClosedAfterReturn, true, 'Popup window should be closed after docking back');
+    assert.equal(dockResult.collapseVisibleAgainInBottom, true, 'Collapse button should be visible again when docked back to bottom');
+  });
 });
+
