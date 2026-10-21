@@ -1,6 +1,6 @@
 {
   "name": "interactions-timeline",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A page timeline recorder and interactive visualizer with time-scrubbing for CSS animations, CSS transitions, WAAPI, Scroll-Driven Animations, scroll positions, and user interactions",
   "type": "module",
   "main": "./dist/index.js",
