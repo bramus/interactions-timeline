@@ -1056,7 +1056,258 @@ describe('<interactions-timeline> End-to-End Browser Tests (Puppeteer + WebDrive
     assert.equal(shortcutAndStorageResult.freshLoadedRate, 0.25, 'New visualizer instance should restore playbackRate from localStorage');
     assert.equal(shortcutAndStorageResult.freshLoadedDock, 'right', 'New visualizer instance should restore dockPosition from localStorage');
   });
+
+  it('captures real keyboard strokes after clicking Start Recording without stealing focus or dropping events', async () => {
+    // 1. Focus #keyboard-target BEFORE clicking Start Recording, then click the Record button with real mouse coordinates
+    const recBtnBox = await page.evaluate(() => {
+      const visualizer = document.querySelector('interactions-timeline');
+      visualizer.closeVisualizer();
+      const kbInput = document.getElementById('keyboard-target');
+      kbInput.value = '';
+      kbInput.focus();
+      const btn = visualizer.shadowRoot.querySelector('[data-testid="record-btn"]');
+      const rect = btn.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    });
+
+    await page.mouse.click(recBtnBox.x, recBtnBox.y);
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Type real keyboard strokes while recording
+    await page.keyboard.type('hi', { delay: 40 });
+    await new Promise((r) => setTimeout(r, 40));
+
+    // Stop recording by clicking the Record button with the mouse
+    await page.mouse.click(recBtnBox.x, recBtnBox.y);
+
+    const typedResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('interactions-timeline');
+      const kbInput = document.getElementById('keyboard-target');
+      const globalKeyEvents = visualizer.store.globalRow.events.filter(
+        (e) => e.type === 'keydown' || e.type === 'keyup'
+      );
+      const kbTrack = visualizer.store.getOrCreateElementTrack(kbInput);
+      const elementKeyEvents = kbTrack.events.filter(
+        (e) => e.type === 'keydown' || e.type === 'keyup'
+      );
+
+      // Scrub to t = 0 and t = duration to verify input value scrubs
+      visualizer.scrubToTime(0);
+      const valueAtZero = kbInput.value;
+      visualizer.scrubToTime(visualizer.store.duration);
+      const valueAtEnd = kbInput.value;
+
+      return {
+        globalKeyCount: globalKeyEvents.length,
+        globalKeys: globalKeyEvents.filter((e) => e.type === 'keydown').map((e) => e.key),
+        elementKeyCount: elementKeyEvents.length,
+        elementKeys: elementKeyEvents.filter((e) => e.type === 'keydown').map((e) => e.key),
+        valueAtZero,
+        valueAtEnd,
+      };
+    });
+
+    assert.equal(typedResult.globalKeyCount, 4, 'Should capture keydown and keyup for both "h" and "i" in global row');
+    assert.deepEqual(typedResult.globalKeys, ['h', 'i']);
+    assert.equal(typedResult.elementKeyCount, 4, 'Should capture keydown and keyup on #keyboard-target element row');
+    assert.deepEqual(typedResult.elementKeys, ['h', 'i']);
+    assert.equal(typedResult.valueAtZero, '', 'Scrubbing to t=0 should restore initial empty input value');
+    assert.equal(typedResult.valueAtEnd, 'hi', 'Scrubbing to end should restore typed input value "hi"');
+
+    // 2. Also test clicking Start Recording when NO input is focused and pressing keys on the page
+    await page.evaluate(() => {
+      const visualizer = document.querySelector('interactions-timeline');
+      visualizer.closeVisualizer();
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+    });
+
+    await page.mouse.click(recBtnBox.x, recBtnBox.y);
+    await new Promise((r) => setTimeout(r, 30));
+    await page.keyboard.press('KeyZ');
+    await page.keyboard.press(' ');
+    await new Promise((r) => setTimeout(r, 30));
+    await page.mouse.click(recBtnBox.x, recBtnBox.y);
+
+    const unfocusedKeyResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('interactions-timeline');
+      const keydowns = visualizer.store.globalRow.events
+        .filter((e) => e.type === 'keydown')
+        .map((e) => e.key);
+      return {
+        isVisualizing: visualizer.isVisualizing,
+        keydowns,
+      };
+    });
+
+    assert.equal(unfocusedKeyResult.isVisualizing, true);
+    assert.deepEqual(unfocusedKeyResult.keydowns, ['z', 'Space']);
+  });
+
+  it('renders a fixed bottom bar with right-aligned "Scroll scrollers" and "Show Key Labels" checkboxes', async () => {
+    // Record a session that has both scrollers (root + #scroll-stage) and keystrokes + clicks
+    await page.evaluate(() => {
+      const visualizer = document.querySelector('interactions-timeline');
+      visualizer.reset();
+      visualizer.setDockPosition('bottom');
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      const scrollStage = document.getElementById('scroll-stage');
+      scrollStage.scrollTop = 0;
+      visualizer.startRecording();
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    await page.evaluate(() => {
+      window.scrollTo({ top: 120, left: 0, behavior: 'instant' });
+      window.dispatchEvent(new Event('scroll'));
+      const scrollStage = document.getElementById('scroll-stage');
+      scrollStage.scrollTop = 140;
+      scrollStage.dispatchEvent(new Event('scroll'));
+      document.getElementById('interaction-btn').click();
+      const kbInput = document.getElementById('keyboard-target');
+      kbInput.focus({ preventScroll: true });
+    });
+
+    await page.keyboard.press('KeyA');
+    await page.keyboard.press('KeyB');
+    await new Promise((r) => setTimeout(r, 40));
+
+    await page.evaluate(() => {
+      const visualizer = document.querySelector('interactions-timeline');
+      visualizer.stopRecording();
+    });
+
+    const bottomBarResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('interactions-timeline');
+      const sheet = visualizer._bottomSheet;
+      const bottomBar = sheet.querySelector('[data-testid="sheet-bottom-bar"]');
+      const controls = sheet.querySelector('[data-testid="bottom-bar-controls"]');
+      const scrollScrollersCb = sheet.querySelector('[data-testid="scroll-scrollers-checkbox"]');
+      const scrollScrollersLabel = sheet.querySelector('[data-testid="scroll-scrollers-label"]');
+      const showKeyLabelsCb = sheet.querySelector('[data-testid="show-key-labels-checkbox"]');
+      const showKeyLabelsLabel = sheet.querySelector('[data-testid="show-key-labels-label"]');
+
+      const sheetRect = sheet.getBoundingClientRect();
+      const barRectBeforeScroll = bottomBar.getBoundingClientRect();
+      const controlsRect = controls.getBoundingClientRect();
+
+      // Scroll the timeline viewport vertically and horizontally and verify bottom bar stays fixed in place
+      visualizer.setZoomLevel(2);
+      visualizer._timelineViewport.scrollTop = 50;
+      visualizer._timelineViewport.scrollLeft = 80;
+      const barRectAfterScroll = bottomBar.getBoundingClientRect();
+
+      // Verify right-edge alignment: controls right edge is near bottomBar right edge
+      const floatedRight = sheetRect.right - controlsRect.right <= 24;
+      const fixedAtBottom =
+        Math.abs(barRectBeforeScroll.bottom - sheetRect.bottom) <= 2 &&
+        Math.abs(barRectAfterScroll.top - barRectBeforeScroll.top) <= 1 &&
+        Math.abs(barRectAfterScroll.left - barRectBeforeScroll.left) <= 1;
+
+      const rowScrollerCheckboxes = Array.from(
+        sheet.querySelectorAll('[data-testid="scroller-checkbox"]')
+      );
+      const initialRowScrollerStates = rowScrollerCheckboxes.map((cb) => cb.checked);
+
+      // Scrub to t=0 while checked so scrollers are at 0
+      visualizer.scrubToTime(0);
+
+      // 1. Uncheck "Scroll scrollers" -> all scroller checkboxes become unchecked
+      scrollScrollersCb.checked = false;
+      scrollScrollersCb.dispatchEvent(new Event('change', { bubbles: true }));
+      const rowScrollerStatesWhenUnchecked = rowScrollerCheckboxes.map((cb) => cb.checked);
+      const allLabelsMarkedUnchecked = Array.from(
+        sheet.querySelectorAll('[data-testid="scroller-toggle-label"]')
+      ).every((lbl) => lbl.classList.contains('is-unchecked'));
+
+      // Verify scrubbing does not move scrollers when unchecked
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      const scrollStage = document.getElementById('scroll-stage');
+      scrollStage.scrollTop = 0;
+      visualizer.scrubToTime(visualizer.store.duration);
+      const rootScrollWhenUnchecked = window.scrollY;
+      const stageScrollWhenUnchecked = scrollStage.scrollTop;
+
+      // 2. Check "Scroll scrollers" again -> all scroller checkboxes become checked and scrollers sync
+      scrollScrollersCb.checked = true;
+      scrollScrollersCb.dispatchEvent(new Event('change', { bubbles: true }));
+      const rowScrollerStatesWhenChecked = rowScrollerCheckboxes.map((cb) => cb.checked);
+      const rootScrollWhenChecked = window.scrollY;
+      const stageScrollWhenChecked = scrollStage.scrollTop;
+
+      // 3. Test "Show Key Labels"
+      const keyLabels = Array.from(
+        sheet.querySelectorAll('.event-marker.type-keydown .event-marker-label')
+      );
+      const clickLabels = Array.from(
+        sheet.querySelectorAll('.event-marker.type-click .event-marker-label')
+      );
+      const keyLabelsVisibleInitially =
+        keyLabels.length > 0 &&
+        keyLabels.every((el) => !el.hidden && getComputedStyle(el).display !== 'none');
+
+      // Uncheck "Show Key Labels"
+      showKeyLabelsCb.checked = false;
+      showKeyLabelsCb.dispatchEvent(new Event('change', { bubbles: true }));
+      const keyLabelsHiddenWhenUnchecked = keyLabels.every(
+        (el) => el.hidden && getComputedStyle(el).display === 'none'
+      );
+      const clickLabelsStillVisible =
+        clickLabels.length > 0 &&
+        clickLabels.every((el) => !el.hidden && getComputedStyle(el).display !== 'none');
+
+      // Re-check "Show Key Labels"
+      showKeyLabelsCb.checked = true;
+      showKeyLabelsCb.dispatchEvent(new Event('change', { bubbles: true }));
+      const keyLabelsVisibleWhenRechecked = keyLabels.every(
+        (el) => !el.hidden && getComputedStyle(el).display !== 'none'
+      );
+
+      return {
+        hasBottomBar: Boolean(bottomBar),
+        scrollScrollersText: scrollScrollersLabel?.textContent?.trim(),
+        showKeyLabelsText: showKeyLabelsLabel?.textContent?.trim(),
+        floatedRight,
+        fixedAtBottom,
+        scrollerCount: rowScrollerCheckboxes.length,
+        initialRowScrollerStates,
+        rowScrollerStatesWhenUnchecked,
+        allLabelsMarkedUnchecked,
+        rootScrollWhenUnchecked,
+        stageScrollWhenUnchecked,
+        rowScrollerStatesWhenChecked,
+        rootScrollWhenChecked,
+        stageScrollWhenChecked,
+        keyLabelsVisibleInitially,
+        keyLabelsHiddenWhenUnchecked,
+        clickLabelsStillVisible,
+        keyLabelsVisibleWhenRechecked,
+      };
+    });
+
+    assert.equal(bottomBarResult.hasBottomBar, true);
+    assert.equal(bottomBarResult.scrollScrollersText, 'Scroll scrollers');
+    assert.equal(bottomBarResult.showKeyLabelsText, 'Show Key Labels');
+    assert.equal(bottomBarResult.floatedRight, true, 'Checkboxes should float to the right edge of the bottom bar');
+    assert.equal(bottomBarResult.fixedAtBottom, true, 'Bottom bar should stay fixed in place at the bottom of the timeline viewer');
+    assert.ok(bottomBarResult.scrollerCount >= 2, 'Should have both root and #scroll-stage scroller checkboxes');
+    assert.deepEqual(bottomBarResult.initialRowScrollerStates, [true, true]);
+    assert.deepEqual(bottomBarResult.rowScrollerStatesWhenUnchecked, [false, false]);
+    assert.equal(bottomBarResult.allLabelsMarkedUnchecked, true);
+    assert.equal(Math.round(bottomBarResult.rootScrollWhenUnchecked), 0);
+    assert.equal(Math.round(bottomBarResult.stageScrollWhenUnchecked), 0);
+    assert.deepEqual(bottomBarResult.rowScrollerStatesWhenChecked, [true, true]);
+    assert.ok(bottomBarResult.rootScrollWhenChecked > 0);
+    assert.ok(bottomBarResult.stageScrollWhenChecked > 0);
+    assert.equal(bottomBarResult.keyLabelsVisibleInitially, true);
+    assert.equal(bottomBarResult.keyLabelsHiddenWhenUnchecked, true);
+    assert.equal(bottomBarResult.clickLabelsStillVisible, true);
+    assert.equal(bottomBarResult.keyLabelsVisibleWhenRechecked, true);
+  });
 });
+
 
 
 

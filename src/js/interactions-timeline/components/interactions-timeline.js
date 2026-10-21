@@ -262,6 +262,12 @@ const COMPONENT_STYLES = `
     overflow: hidden;
   }
 
+  .bottom-sheet.dock-bottom.is-collapsed .legend-bar,
+  .bottom-sheet.dock-bottom.is-collapsed .timeline-viewport,
+  .bottom-sheet.dock-bottom.is-collapsed .sheet-bottom-bar {
+    display: none !important;
+  }
+
   .resize-handle {
     height: 7px;
     width: 100%;
@@ -582,11 +588,65 @@ const COMPONENT_STYLES = `
   .timeline-viewport {
     position: relative;
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: auto;
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
+  }
+
+  /* Fixed Bottom Bar */
+  .sheet-bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    padding: 6px 14px;
+    background: var(--bg-panel-elevated);
+    border-top: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--text-main);
+    flex-shrink: 0;
+    z-index: 25;
+  }
+
+  .bottom-bar-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .bottom-bar-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: #e2e8f0;
+    user-select: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .bottom-bar-checkbox-label:hover {
+    background: rgba(51, 65, 85, 0.55);
+    color: #ffffff;
+  }
+
+  .bottom-bar-checkbox {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: #38bdf8;
+    cursor: pointer;
+  }
+
+  .bottom-sheet.hide-key-labels .event-marker.type-keydown .event-marker-label {
+    display: none !important;
   }
 
   /* Sticky Time Ruler + Pinned Global Row Header */
@@ -1001,11 +1061,13 @@ const COMPONENT_STYLES = `
     position: absolute;
     top: 2px;
     left: 6px;
+    z-index: 8;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 9.5px;
     padding: 0 4px;
     border-radius: 3px;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(168, 85, 247, 0.35);
     color: #f8fafc;
     white-space: nowrap;
     pointer-events: none;
@@ -1018,13 +1080,25 @@ const COMPONENT_STYLES = `
     background: var(--color-click);
   }
 
-  .event-marker.type-keydown,
-  .event-marker.type-keyup {
+  .event-marker.type-keydown {
+    background: var(--color-key);
+    z-index: 7;
+  }
+  .event-marker.type-keydown .event-marker-dot {
     background: var(--color-key);
   }
-  .event-marker.type-keydown .event-marker-dot,
+
+  .event-marker.type-keyup {
+    background: var(--color-key);
+    opacity: 0.55;
+    z-index: 5;
+  }
   .event-marker.type-keyup .event-marker-dot {
     background: var(--color-key);
+    top: auto;
+    bottom: 4px;
+    width: 6px;
+    height: 6px;
   }
 
   .event-marker.type-scroll {
@@ -1151,6 +1225,8 @@ export class InteractionsTimeline extends BaseHTMLElement {
     this.dockPosition = 'bottom';
     this.playbackRate = 1;
     this.zoomLevel = 1;
+    this.scrollAllScrollers = true;
+    this.showKeyLabels = true;
 
     this._sheetHeightPx = 400;
     this._sheetWidthPx = 620;
@@ -1174,10 +1250,13 @@ export class InteractionsTimeline extends BaseHTMLElement {
     this._savedWindowScroll = null;
     /** @type {Map<Element, { scrollTop: number, scrollLeft: number }>} */
     this._savedElementScrolls = new Map();
+    /** @type {Map<Element, string>} */
+    this._savedElementValues = new Map();
 
     this._boundLifecycleHandler = this._onLifecycleEvent.bind(this);
     this._boundClickHandler = this._onClickEvent.bind(this);
     this._boundKeyHandler = this._onKeyEvent.bind(this);
+    this._boundInputHandler = this._onInputEvent.bind(this);
     this._boundScrollHandler = this._onScrollEvent.bind(this);
 
     this._buildShadowDom();
@@ -1212,6 +1291,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
         part: 'record-button',
         'data-testid': 'record-btn',
         'aria-label': 'Start or stop timeline recording',
+        onMouseDown: (e) => e.preventDefault(),
         onClick: () => this.toggleRecording(),
       },
       this._recDot,
@@ -1232,6 +1312,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
         className: 'rec-secondary-btn',
         'data-testid': 'reopen-sheet-btn',
         hidden: true,
+        onMouseDown: (e) => e.preventDefault(),
         onClick: () => this.openVisualizer(),
       },
       'Show Timeline'
@@ -1584,6 +1665,68 @@ export class InteractionsTimeline extends BaseHTMLElement {
     );
     this._setupTimelineZoomAndPan();
 
+    this._scrollScrollersCheckbox = h('input', {
+      type: 'checkbox',
+      className: 'bottom-bar-checkbox',
+      'data-testid': 'scroll-scrollers-checkbox',
+      checked: true,
+      onChange: (e) => {
+        this.setScrollAllScrollers(Boolean(e.target.checked));
+      },
+    });
+    this._scrollScrollersCheckbox.checked = true;
+
+    this._scrollScrollersLabel = h(
+      'label',
+      {
+        className: 'bottom-bar-checkbox-label',
+        'data-testid': 'scroll-scrollers-label',
+        title: 'Toggle scrolling all scrollers when scrubbing the timeline',
+      },
+      this._scrollScrollersCheckbox,
+      h('span', { textContent: 'Scroll scrollers' })
+    );
+
+    this._showKeyLabelsCheckbox = h('input', {
+      type: 'checkbox',
+      className: 'bottom-bar-checkbox',
+      'data-testid': 'show-key-labels-checkbox',
+      checked: true,
+      onChange: (e) => {
+        this.setShowKeyLabels(Boolean(e.target.checked));
+      },
+    });
+    this._showKeyLabelsCheckbox.checked = true;
+
+    this._showKeyLabelsLabel = h(
+      'label',
+      {
+        className: 'bottom-bar-checkbox-label',
+        'data-testid': 'show-key-labels-label',
+        title: 'Show or hide keystroke labels on the timeline',
+      },
+      this._showKeyLabelsCheckbox,
+      h('span', { textContent: 'Show Key Labels' })
+    );
+
+    this._bottomBar = h(
+      'div',
+      {
+        className: 'sheet-bottom-bar',
+        part: 'bottom-bar',
+        'data-testid': 'sheet-bottom-bar',
+      },
+      h(
+        'div',
+        {
+          className: 'bottom-bar-controls',
+          'data-testid': 'bottom-bar-controls',
+        },
+        this._scrollScrollersLabel,
+        this._showKeyLabelsLabel
+      )
+    );
+
     this._bottomSheet = h(
       'section',
       {
@@ -1598,7 +1741,8 @@ export class InteractionsTimeline extends BaseHTMLElement {
       this._resizeHandle,
       toolbar,
       legendBar,
-      this._timelineViewport
+      this._timelineViewport,
+      this._bottomBar
     );
     this._setupKeyboardShortcuts();
 
@@ -2254,6 +2398,14 @@ export class InteractionsTimeline extends BaseHTMLElement {
     this._reopenSheetBtn.hidden = true;
     this.isVisualizing = false;
 
+    // Ensure focus is not trapped inside the recorder button while recording page interactions
+    if (this.shadowRoot?.activeElement && typeof this.shadowRoot.activeElement.blur === 'function') {
+      this.shadowRoot.activeElement.blur();
+    }
+    if (typeof document !== 'undefined' && document.activeElement === this && typeof this.blur === 'function') {
+      this.blur();
+    }
+
     const now = performance.now();
     this.store.start(now);
     this.isRecording = true;
@@ -2446,6 +2598,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
     window.addEventListener('click', this._boundClickHandler, { capture: true, passive: true });
     window.addEventListener('keydown', this._boundKeyHandler, { capture: true, passive: true });
     window.addEventListener('keyup', this._boundKeyHandler, { capture: true, passive: true });
+    window.addEventListener('input', this._boundInputHandler, { capture: true, passive: true });
     window.addEventListener('scroll', this._boundScrollHandler, { capture: true, passive: true });
     document.addEventListener('scroll', this._boundScrollHandler, { capture: true, passive: true });
 
@@ -2518,6 +2671,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
     window.removeEventListener('click', this._boundClickHandler, { capture: true });
     window.removeEventListener('keydown', this._boundKeyHandler, { capture: true });
     window.removeEventListener('keyup', this._boundKeyHandler, { capture: true });
+    window.removeEventListener('input', this._boundInputHandler, { capture: true });
     window.removeEventListener('scroll', this._boundScrollHandler, { capture: true });
     document.removeEventListener('scroll', this._boundScrollHandler, { capture: true });
 
@@ -2634,10 +2788,14 @@ export class InteractionsTimeline extends BaseHTMLElement {
 
   _onKeyEvent(event) {
     if (!this.isRecording || this._isScrubbing) return;
-    if (isEventFromRecorder(event, this, this.shadowRoot)) return;
+    // Only ignore if the visualizer sheet is actively open and the key event originated inside it
+    if (this.isVisualizing && !this._bottomSheet.hidden && isEventFromRecorder(event, this, this.shadowRoot)) {
+      return;
+    }
 
     const t = Math.max(0, performance.now() - this.store.startTime);
-    const keyLabel = event.key || event.code || 'Key';
+    const rawKey = event.key || event.code || 'Key';
+    const keyLabel = rawKey === ' ' ? 'Space' : rawKey;
 
     // Always record keyboard event in pinned global window/document row
     this.store.recordGlobalEvent({
@@ -2648,20 +2806,65 @@ export class InteractionsTimeline extends BaseHTMLElement {
       detail: `${event.type}: ${keyLabel}`,
     });
 
-    // Also record on target element if focused on a specific element
-    const target = event.target;
+    // Resolve target element on the page (unwrapping composedPath or falling back to activeElement)
+    const composedFirst =
+      typeof event.composedPath === 'function' ? event.composedPath()[0] : null;
+    const target =
+      composedFirst instanceof Element && !this.isOwnNode(composedFirst)
+        ? composedFirst
+        : event.target instanceof Element && !this.isOwnNode(event.target)
+          ? event.target
+          : typeof document !== 'undefined' &&
+              document.activeElement instanceof Element &&
+              !this.isOwnNode(document.activeElement)
+            ? document.activeElement
+            : null;
+
     if (
-      target instanceof Element &&
+      target &&
       target !== document.body &&
-      target !== document.documentElement &&
-      !this.isOwnNode(target)
+      target !== document.documentElement
     ) {
+      if (typeof target.value === 'string') {
+        const track = this.store.getOrCreateElementTrack(target, t);
+        if (track && track.valueSamples.length === 0) {
+          this.store.recordElementValue(target, 0, target.value);
+        }
+        this.store.recordElementValue(target, t, target.value);
+      }
+
       this.store.recordElementEvent(target, {
         type: event.type,
         timestamp: t,
         key: keyLabel,
+        code: event.code || null,
         detail: `${event.type}: ${keyLabel}`,
       });
+    }
+  }
+
+  _onInputEvent(event) {
+    if (!this.isRecording || this._isScrubbing) return;
+    if (this.isVisualizing && !this._bottomSheet.hidden && isEventFromRecorder(event, this, this.shadowRoot)) {
+      return;
+    }
+
+    const t = Math.max(0, performance.now() - this.store.startTime);
+    const composedFirst =
+      typeof event.composedPath === 'function' ? event.composedPath()[0] : null;
+    const target =
+      composedFirst instanceof Element && !this.isOwnNode(composedFirst)
+        ? composedFirst
+        : event.target instanceof Element && !this.isOwnNode(event.target)
+          ? event.target
+          : null;
+
+    if (target && typeof target.value === 'string') {
+      const track = this.store.getOrCreateElementTrack(target, t);
+      if (track && track.valueSamples.length === 0) {
+        this.store.recordElementValue(target, 0, '');
+      }
+      this.store.recordElementValue(target, t, target.value);
     }
   }
 
@@ -2735,6 +2938,17 @@ export class InteractionsTimeline extends BaseHTMLElement {
 
     this._pauseAllPageAnimations();
 
+    if (this.scrollAllScrollers === false) {
+      if (this.store && this.store.globalRow) {
+        this.store.globalRow.scrollEnabled = false;
+      }
+      if (this.store && this.store.elementTracks) {
+        for (const track of this.store.elementTracks.values()) {
+          track.scrollEnabled = false;
+        }
+      }
+    }
+
     const duration = Math.max(1, Math.round(this.store.duration || 1000));
     this._scrubberSlider.max = String(duration);
     this._scrubberSlider.value = String(duration);
@@ -2773,6 +2987,8 @@ export class InteractionsTimeline extends BaseHTMLElement {
     this.restorePageState();
     this.store.reset();
     this.setZoomLevel(1);
+    this.setScrollAllScrollers(true);
+    this.setShowKeyLabels(true);
     this.isVisualizing = false;
     this._bottomSheet.hidden = true;
     this._reopenSheetBtn.hidden = true;
@@ -2806,12 +3022,17 @@ export class InteractionsTimeline extends BaseHTMLElement {
     };
 
     this._savedElementScrolls.clear();
+    this._savedElementValues.clear();
     for (const [el, track] of this.store.elementTracks.entries()) {
-      if (track.scrollSamples.length > 0 && el.isConnected) {
+      if (!el.isConnected) continue;
+      if (track.scrollSamples.length > 0) {
         this._savedElementScrolls.set(el, {
           scrollTop: el.scrollTop,
           scrollLeft: el.scrollLeft,
         });
+      }
+      if (Array.isArray(track.valueSamples) && track.valueSamples.length > 0 && typeof el.value === 'string') {
+        this._savedElementValues.set(el, el.value);
       }
     }
 
@@ -2874,6 +3095,13 @@ export class InteractionsTimeline extends BaseHTMLElement {
         }
       }
       this._savedElementScrolls.clear();
+
+      for (const [el, val] of this._savedElementValues.entries()) {
+        if (el.isConnected && typeof el.value === 'string') {
+          el.value = val;
+        }
+      }
+      this._savedElementValues.clear();
 
       // 3. Unpause / restore original page animations
       for (const item of this._pausedPageAnimations) {
@@ -2946,7 +3174,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
         }
       }
 
-      // 3. Scrub scrollable element containers and element animations/transitions
+      // 3. Scrub scrollable element containers, input values, and element animations/transitions
       for (const [el, track] of this.store.elementTracks.entries()) {
         if (!el || !el.isConnected) continue;
 
@@ -2959,7 +3187,15 @@ export class InteractionsTimeline extends BaseHTMLElement {
           }
         }
 
-        // 3b. Animations and transitions on this element
+        // 3b. Input / Textarea value if keyboard/input changes were recorded
+        if (Array.isArray(track.valueSamples) && track.valueSamples.length > 0 && typeof el.value === 'string') {
+          const elVal = this.store.getElementValueAt(el, t);
+          if (elVal !== null) {
+            el.value = elVal;
+          }
+        }
+
+        // 3c. Animations and transitions on this element
         for (const record of track.animations) {
           this._scrubAnimationRecord(el, record, t);
         }
@@ -3230,6 +3466,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
           textContent: 'No element animations, transitions, or element events recorded yet.',
         })
       );
+      this._syncScrollScrollersCheckbox();
       return;
     }
 
@@ -3243,6 +3480,107 @@ export class InteractionsTimeline extends BaseHTMLElement {
       }
       const rowEl = this._createElementRow(track, duration);
       this._elementRowsContainer.appendChild(rowEl);
+    }
+
+    this._syncScrollScrollersCheckbox();
+  }
+
+  /**
+   * Sets all scrollers' checkboxes and scrollEnabled state to the given boolean value.
+   *
+   * @param {boolean} enabled
+   */
+  setScrollAllScrollers(enabled) {
+    const isEnabled = Boolean(enabled);
+    this.scrollAllScrollers = isEnabled;
+
+    if (this.store && this.store.globalRow) {
+      this.store.globalRow.scrollEnabled = isEnabled;
+    }
+    if (this.store && this.store.elementTracks) {
+      for (const track of this.store.elementTracks.values()) {
+        track.scrollEnabled = isEnabled;
+      }
+    }
+
+    if (this._scrollScrollersCheckbox) {
+      this._scrollScrollersCheckbox.checked = isEnabled;
+      this._scrollScrollersCheckbox.indeterminate = false;
+    }
+
+    if (this._bottomSheet) {
+      const checkboxes = this._bottomSheet.querySelectorAll('[data-testid="scroller-checkbox"]');
+      for (const cb of checkboxes) {
+        cb.checked = isEnabled;
+      }
+      const labels = this._bottomSheet.querySelectorAll('[data-testid="scroller-toggle-label"]');
+      for (const label of labels) {
+        label.classList.toggle('is-unchecked', !isEnabled);
+      }
+    }
+
+    if (isEnabled && this.isVisualizing) {
+      this.scrubToTime(this.currentScrubTime);
+    }
+  }
+
+  _syncScrollScrollersCheckbox() {
+    if (!this._scrollScrollersCheckbox) return;
+
+    const scrollerTargets = [];
+    if (this.store?.globalRow?.scrollSamples?.length > 0) {
+      scrollerTargets.push(this.store.globalRow);
+    }
+    if (this.store?.elementTracks) {
+      for (const track of this.store.elementTracks.values()) {
+        if (track.scrollSamples && track.scrollSamples.length > 0) {
+          scrollerTargets.push(track);
+        }
+      }
+    }
+
+    if (scrollerTargets.length === 0) {
+      this._scrollScrollersCheckbox.checked = Boolean(this.scrollAllScrollers);
+      this._scrollScrollersCheckbox.indeterminate = false;
+      return;
+    }
+
+    const enabledCount = scrollerTargets.filter((t) => t.scrollEnabled !== false).length;
+    if (enabledCount === scrollerTargets.length) {
+      this.scrollAllScrollers = true;
+      this._scrollScrollersCheckbox.checked = true;
+      this._scrollScrollersCheckbox.indeterminate = false;
+    } else if (enabledCount === 0) {
+      this.scrollAllScrollers = false;
+      this._scrollScrollersCheckbox.checked = false;
+      this._scrollScrollersCheckbox.indeterminate = false;
+    } else {
+      this._scrollScrollersCheckbox.checked = false;
+      this._scrollScrollersCheckbox.indeterminate = true;
+    }
+  }
+
+  /**
+   * Controls whether keystroke labels are shown on the timeline.
+   *
+   * @param {boolean} visible
+   */
+  setShowKeyLabels(visible) {
+    const isVisible = Boolean(visible);
+    this.showKeyLabels = isVisible;
+
+    if (this._showKeyLabelsCheckbox) {
+      this._showKeyLabelsCheckbox.checked = isVisible;
+    }
+
+    if (this._bottomSheet) {
+      this._bottomSheet.classList.toggle('hide-key-labels', !isVisible);
+      const keyLabels = this._bottomSheet.querySelectorAll(
+        '.event-marker.type-keydown .event-marker-label'
+      );
+      for (const label of keyLabels) {
+        label.hidden = !isVisible;
+      }
     }
   }
 
@@ -3259,6 +3597,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
       onChange: (e) => {
         targetObj.scrollEnabled = Boolean(e.target.checked);
         badgeLabel.classList.toggle('is-unchecked', !targetObj.scrollEnabled);
+        this._syncScrollScrollersCheckbox();
         if (targetObj.scrollEnabled && this.isVisualizing) {
           this.scrubToTime(this.currentScrubTime);
         }
@@ -3323,8 +3662,9 @@ export class InteractionsTimeline extends BaseHTMLElement {
     );
 
     // Render global discrete events (keyboard, root scroll, global click)
+    const globalSlotTracker = { slot: 0, lastPct: -100 };
     for (const evt of globalData.events) {
-      const marker = this._createEventMarker(evt, duration, false);
+      const marker = this._createEventMarker(evt, duration, false, globalSlotTracker);
       trackCanvas.appendChild(marker);
     }
 
@@ -3404,8 +3744,9 @@ export class InteractionsTimeline extends BaseHTMLElement {
     }
 
     // 3. Discrete event vertical lines/markers
+    const slotTracker = { slot: 0, lastPct: -100 };
     for (const evt of track.events) {
-      const marker = this._createEventMarker(evt, duration, isRemoved);
+      const marker = this._createEventMarker(evt, duration, isRemoved, slotTracker);
       trackCanvas.appendChild(marker);
     }
 
@@ -3679,7 +4020,7 @@ export class InteractionsTimeline extends BaseHTMLElement {
     }
   }
 
-  _createEventMarker(evt, totalDuration, isRemoved) {
+  _createEventMarker(evt, totalDuration, isRemoved, slotTracker = null) {
     const leftPct = Math.max(0, Math.min(99.7, (evt.timestamp / totalDuration) * 100));
     const classes = [
       'event-marker',
@@ -3691,12 +4032,26 @@ export class InteractionsTimeline extends BaseHTMLElement {
 
     let badgeText = null;
     if (evt.type === 'keydown' && evt.key) {
-      badgeText = `⌨ ${evt.key}`;
+      const displayKey = evt.key === ' ' ? 'Space' : evt.key;
+      badgeText = `⌨ ${displayKey}`;
     } else if (evt.type === 'click') {
       badgeText = '🖱 click';
     } else if (evt.type === 'removed') {
       badgeText = '⚠️ removed';
     }
+
+    let labelTopPx = 2;
+    if (badgeText && slotTracker) {
+      if (leftPct - slotTracker.lastPct < 7.5) {
+        slotTracker.slot = (slotTracker.slot + 1) % 3;
+      } else {
+        slotTracker.slot = 0;
+      }
+      slotTracker.lastPct = leftPct;
+      labelTopPx = 2 + slotTracker.slot * 13;
+    }
+
+    const isKeydownLabel = evt.type === 'keydown';
 
     return h(
       'div',
@@ -3709,7 +4064,15 @@ export class InteractionsTimeline extends BaseHTMLElement {
         title: `${evt.detail || evt.type} @ ${Math.round(evt.timestamp)}ms`,
       },
       h('span', { className: 'event-marker-dot' }),
-      badgeText ? h('span', { className: 'event-marker-label', textContent: badgeText }) : null
+      badgeText
+        ? h('span', {
+            className: 'event-marker-label',
+            'data-testid': isKeydownLabel ? 'key-event-label' : 'event-marker-label',
+            hidden: isKeydownLabel && !this.showKeyLabels,
+            style: { top: `${labelTopPx}px` },
+            textContent: badgeText,
+          })
+        : null
     );
   }
 

@@ -323,6 +323,7 @@ export class TimelineStore {
         events: [],
         scrollSamples: [],
         scrollSpans: [],
+        valueSamples: [],
         scrollEnabled: true,
         laneCount: 1,
       };
@@ -953,5 +954,50 @@ export class TimelineStore {
     const track = this.elementTracks.get(element);
     if (!track) return null;
     return interpolateScroll(track.scrollSamples, t);
+  }
+
+  /**
+   * Records a text input / textarea value snapshot on a tracked element.
+   *
+   * @param {Element} element
+   * @param {number} timestamp
+   * @param {string} value
+   */
+  recordElementValue(element, timestamp, value) {
+    const track = this.getOrCreateElementTrack(element, timestamp);
+    if (!track) return;
+
+    const t = Math.max(0, timestamp);
+    const strVal = String(value ?? '');
+    const samples = track.valueSamples;
+    const prev = samples[samples.length - 1];
+
+    if (!prev || prev.value !== strVal) {
+      samples.push({ t, value: strVal });
+    }
+  }
+
+  /**
+   * Returns the recorded value of an input/textarea element at relative time `t`.
+   *
+   * @param {Element} element
+   * @param {number} t
+   * @returns {string|null}
+   */
+  getElementValueAt(element, t) {
+    const track = this.elementTracks.get(element);
+    if (!track || !Array.isArray(track.valueSamples) || track.valueSamples.length === 0) {
+      return null;
+    }
+    const samples = track.valueSamples;
+    let current = samples[0].value;
+    for (const s of samples) {
+      if (s.t <= t) {
+        current = s.value;
+      } else {
+        break;
+      }
+    }
+    return current;
   }
 }
