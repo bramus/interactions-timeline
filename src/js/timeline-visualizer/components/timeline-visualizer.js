@@ -1120,6 +1120,11 @@ const COMPONENT_STYLES = `
     clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
   }
 
+  .bottom-sheet:focus,
+  .timeline-viewport:focus {
+    outline: none;
+  }
+
   .empty-state {
     padding: 28px;
     text-align: center;
@@ -1127,6 +1132,9 @@ const COMPONENT_STYLES = `
     font-size: 13px;
   }
 `;
+
+export const STORAGE_KEY_PLAYBACK_RATE = 'timeline-visualizer:playback-rate';
+export const STORAGE_KEY_DOCK_POSITION = 'timeline-visualizer:dock-position';
 
 const BaseHTMLElement = typeof HTMLElement !== 'undefined' ? HTMLElement : class {};
 
@@ -1173,6 +1181,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     this._boundScrollHandler = this._onScrollEvent.bind(this);
 
     this._buildShadowDom();
+    this._loadPersistedSettings();
   }
 
   connectedCallback() {
@@ -1568,6 +1577,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
       {
         className: 'timeline-viewport',
         'data-testid': 'timeline-viewport',
+        tabindex: '0',
       },
       stickyTop,
       this._timelineBodyWrapper
@@ -1582,6 +1592,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
         'data-testid': 'bottom-sheet',
         'data-dock': 'bottom',
         'aria-label': 'Recorded timeline visualizer',
+        tabindex: '0',
         hidden: true,
       },
       this._resizeHandle,
@@ -1589,6 +1600,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
       legendBar,
       this._timelineViewport
     );
+    this._setupKeyboardShortcuts();
 
     this.shadowRoot.replaceChildren(
       style,
@@ -1827,13 +1839,17 @@ export class TimelineVisualizer extends BaseHTMLElement {
    * Sets the docking position of the visualizer panel: 'left', 'bottom', 'right', or 'popout'.
    *
    * @param {'left' | 'bottom' | 'right' | 'popout'} position
+   * @param {{ persist?: boolean }} [options]
    */
-  setDockPosition(position) {
+  setDockPosition(position, { persist = true } = {}) {
     const valid =
       position === 'left' || position === 'right' || position === 'popout'
         ? position
         : 'bottom';
     this.dockPosition = valid;
+    if (persist) {
+      this._saveSetting(STORAGE_KEY_DOCK_POSITION, valid);
+    }
 
     const buttons = [
       [this._dockBtnLeft, 'left'],
@@ -1896,7 +1912,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     }
 
     if (!popup || !popup.document) {
-      this.setDockPosition('bottom');
+      this.setDockPosition('bottom', { persist: false });
       return null;
     }
 
@@ -1932,7 +1948,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
         if (popup._closedProgrammatically || this._isClosingPopoutProgrammatically) return;
         this._popupWindow = null;
         this.shadowRoot.appendChild(this._bottomSheet);
-        this.setDockPosition('bottom');
+        this.setDockPosition('bottom', { persist: false });
         if (this.isVisualizing) {
           this.closeVisualizer();
         }
@@ -1941,6 +1957,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
 
     try {
       popup.focus();
+      this._bottomSheet.focus({ preventScroll: true });
     } catch {
       // Ignore focus restrictions
     }
@@ -1989,11 +2006,122 @@ export class TimelineVisualizer extends BaseHTMLElement {
 
     trackEl.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      try {
+        this._bottomSheet?.focus({ preventScroll: true });
+      } catch {
+        // Ignore focus errors
+      }
       activeWin = trackEl.ownerDocument?.defaultView || window;
       scrubFromPointer(e.clientX);
       activeWin.addEventListener('pointermove', onPointerMove);
       activeWin.addEventListener('pointerup', onPointerUp);
     });
+  }
+
+  _setupKeyboardShortcuts() {
+    const onKeyDown = (e) => this._onVisualizerKeyDown(e);
+    this._bottomSheet.addEventListener('keydown', onKeyDown);
+    this.addEventListener('keydown', onKeyDown);
+  }
+
+  _onVisualizerKeyDown(e) {
+    if (e._timelineShortcutHandled) return;
+    if (!this.isVisualizing || this._bottomSheet.hidden) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+    const key = e.key;
+
+    // 1. Left / Right arrow = nudge the scrubber in that direction
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      e._timelineShortcutHandled = true;
+      e.preventDefault();
+      this._stopTimelineReplay();
+      const stepMs = e.shiftKey ? 100 : 20;
+      const delta = key === 'ArrowRight' ? stepMs : -stepMs;
+      this.scrubToTime(this.currentScrubTime + delta);
+      return;
+    }
+
+    // 2. Space = Play / Pause the recording (re)playing
+    if (key === ' ' || e.code === 'Space') {
+      if (e.target && e.target.tagName === 'INPUT' && e.target.type === 'checkbox') {
+        return;
+      }
+      e._timelineShortcutHandled = true;
+      e.preventDefault();
+      this._toggleTimelineReplay();
+      return;
+    }
+
+    // 3. < and > to decrease/increase the playback speed (25% / 50% / 100%)
+    if (key === '<' || key === ',') {
+      e._timelineShortcutHandled = true;
+      e.preventDefault();
+      const speeds = [0.25, 0.5, 1];
+      const idx = speeds.indexOf(this.playbackRate);
+      const nextIdx = idx > 0 ? idx - 1 : 0;
+      this.setPlaybackRate(speeds[nextIdx]);
+      return;
+    }
+
+    if (key === '>' || key === '.') {
+      e._timelineShortcutHandled = true;
+      e.preventDefault();
+      const speeds = [0.25, 0.5, 1];
+      const idx = speeds.indexOf(this.playbackRate);
+      const nextIdx = idx >= 0 && idx < speeds.length - 1 ? idx + 1 : speeds.length - 1;
+      this.setPlaybackRate(speeds[nextIdx]);
+      return;
+    }
+
+    // 4. + and - to zoom in/out
+    if (key === '+' || key === '=') {
+      e._timelineShortcutHandled = true;
+      e.preventDefault();
+      this.setZoomLevel(this.zoomLevel * 1.35);
+      return;
+    }
+
+    if (key === '-' || key === '_') {
+      e._timelineShortcutHandled = true;
+      e.preventDefault();
+      this.setZoomLevel(this.zoomLevel / 1.35);
+      return;
+    }
+  }
+
+  _saveSetting(key, value) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(key, String(value));
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+  }
+
+  _loadPersistedSettings() {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const savedRate = localStorage.getItem(STORAGE_KEY_PLAYBACK_RATE);
+      if (savedRate !== null) {
+        const parsedRate = Number(savedRate);
+        if (parsedRate === 0.25 || parsedRate === 0.5 || parsedRate === 1) {
+          this.setPlaybackRate(parsedRate, { persist: false });
+        }
+      }
+      const savedDock = localStorage.getItem(STORAGE_KEY_DOCK_POSITION);
+      if (
+        savedDock === 'left' ||
+        savedDock === 'bottom' ||
+        savedDock === 'right' ||
+        savedDock === 'popout'
+      ) {
+        this.setDockPosition(savedDock, { persist: false });
+      }
+    } catch {
+      // Ignore storage access errors
+    }
   }
 
   _setupTimelineZoomAndPan() {
@@ -2587,6 +2715,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
    * Opens the bottom sheet visualizer, pauses all page animations/transitions, and renders the timeline.
    */
   openVisualizer() {
+    this._loadPersistedSettings();
     this.isVisualizing = true;
     this.isCollapsed = false;
     this._bottomSheet.classList.remove('is-collapsed');
@@ -2596,6 +2725,12 @@ export class TimelineVisualizer extends BaseHTMLElement {
 
     if (this.dockPosition === 'popout') {
       this._openInPopoutWindow();
+    } else {
+      try {
+        this._bottomSheet.focus({ preventScroll: true });
+      } catch {
+        // Ignore focus errors
+      }
     }
 
     this._pauseAllPageAnimations();
@@ -2997,12 +3132,16 @@ export class TimelineVisualizer extends BaseHTMLElement {
    * Sets the timeline replay speed multiplier (0.25 for 25%, 0.5 for 50%, 1 for 100%).
    *
    * @param {number} rate
+   * @param {{ persist?: boolean }} [options]
    */
-  setPlaybackRate(rate) {
+  setPlaybackRate(rate, { persist = true } = {}) {
     let num = Number(rate);
     if (num > 1) num = num / 100;
     const valid = num === 0.25 || num === 0.5 ? num : 1;
     this.playbackRate = valid;
+    if (persist) {
+      this._saveSetting(STORAGE_KEY_PLAYBACK_RATE, valid);
+    }
 
     const buttons = [
       [this._speedBtn25, 0.25],

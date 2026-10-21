@@ -929,6 +929,134 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       'CTRL + wheel down should zoom back out'
     );
   });
+
+  it('supports keyboard shortcuts when focused (ArrowLeft/Right, Space, </>, +/-) and persists playback speed and docking position in LocalStorage across recordings', async () => {
+    const shortcutAndStorageResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const sheet = visualizer._bottomSheet;
+      sheet.focus();
+
+      // Start at a known state
+      visualizer.setPlaybackRate(1);
+      visualizer.setZoomLevel(1);
+      visualizer.scrubToTime(200);
+      const tInitial = visualizer.currentScrubTime;
+
+      const pressKey = (key, code = '') => {
+        sheet.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key,
+            code,
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      };
+
+      // 1. ArrowLeft / ArrowRight nudges scrubber
+      pressKey('ArrowLeft', 'ArrowLeft');
+      const tAfterLeft = visualizer.currentScrubTime;
+      pressKey('ArrowRight', 'ArrowRight');
+      pressKey('ArrowRight', 'ArrowRight');
+      const tAfterRightTwice = visualizer.currentScrubTime;
+
+      // 2. Space toggles Play / Pause replay
+      pressKey(' ', 'Space');
+      const isPlayingAfterFirstSpace = Boolean(visualizer._playbackRafId);
+      const playBtnTextWhilePlaying = visualizer._playScrubBtn.textContent;
+      pressKey(' ', 'Space');
+      const isPlayingAfterSecondSpace = Boolean(visualizer._playbackRafId);
+      const playBtnTextAfterPause = visualizer._playScrubBtn.textContent;
+
+      // 3. < and > decreases / increases playback speed (100% -> 50% -> 25% -> 50% -> 100%)
+      pressKey('<');
+      const speedAfterFirstDecrease = visualizer.playbackRate;
+      pressKey('<');
+      const speedAfterSecondDecrease = visualizer.playbackRate;
+      pressKey('>');
+      const speedAfterIncrease = visualizer.playbackRate;
+
+      // 4. + and - zooms in / out
+      pressKey('+');
+      const zoomAfterPlus = visualizer.zoomLevel;
+      pressKey('-');
+      const zoomAfterMinus = visualizer.zoomLevel;
+
+      // 5. LocalStorage persistence across recordings and new instances
+      visualizer.setPlaybackRate(0.25);
+      visualizer.setDockPosition('right');
+      const storedRate = localStorage.getItem('timeline-visualizer:playback-rate');
+      const storedDock = localStorage.getItem('timeline-visualizer:dock-position');
+
+      // Start and stop a new recording and verify settings persist
+      visualizer.startRecording();
+      visualizer.stopRecording();
+      const rateAfterSuccessiveRecording = visualizer.playbackRate;
+      const dockAfterSuccessiveRecording = visualizer.dockPosition;
+
+      // Create a brand new <timeline-visualizer> instance and verify it loads from LocalStorage
+      const TempCtor = customElements.get('timeline-visualizer');
+      const freshInstance = new TempCtor();
+      const freshLoadedRate = freshInstance.playbackRate;
+      const freshLoadedDock = freshInstance.dockPosition;
+
+      // Clean up back to defaults
+      visualizer.setPlaybackRate(1);
+      visualizer.setDockPosition('bottom');
+      localStorage.removeItem('timeline-visualizer:playback-rate');
+      localStorage.removeItem('timeline-visualizer:dock-position');
+
+      return {
+        tInitial,
+        tAfterLeft,
+        tAfterRightTwice,
+        isPlayingAfterFirstSpace,
+        playBtnTextWhilePlaying,
+        isPlayingAfterSecondSpace,
+        playBtnTextAfterPause,
+        speedAfterFirstDecrease,
+        speedAfterSecondDecrease,
+        speedAfterIncrease,
+        zoomAfterPlus,
+        zoomAfterMinus,
+        storedRate,
+        storedDock,
+        rateAfterSuccessiveRecording,
+        dockAfterSuccessiveRecording,
+        freshLoadedRate,
+        freshLoadedDock,
+      };
+    });
+
+    assert.ok(
+      shortcutAndStorageResult.tAfterLeft < shortcutAndStorageResult.tInitial,
+      'ArrowLeft should nudge scrubber backward'
+    );
+    assert.ok(
+      shortcutAndStorageResult.tAfterRightTwice > shortcutAndStorageResult.tInitial,
+      'ArrowRight should nudge scrubber forward'
+    );
+
+    assert.equal(shortcutAndStorageResult.isPlayingAfterFirstSpace, true, 'Space should start replay');
+    assert.equal(shortcutAndStorageResult.playBtnTextWhilePlaying, '⏸ Pause');
+    assert.equal(shortcutAndStorageResult.isPlayingAfterSecondSpace, false, 'Space again should pause replay');
+    assert.equal(shortcutAndStorageResult.playBtnTextAfterPause, '▶ Replay');
+
+    assert.equal(shortcutAndStorageResult.speedAfterFirstDecrease, 0.5, '< should decrease speed from 100% to 50%');
+    assert.equal(shortcutAndStorageResult.speedAfterSecondDecrease, 0.25, '< should decrease speed from 50% to 25%');
+    assert.equal(shortcutAndStorageResult.speedAfterIncrease, 0.5, '> should increase speed from 25% to 50%');
+
+    assert.ok(shortcutAndStorageResult.zoomAfterPlus > 1, '+ should zoom in');
+    assert.equal(shortcutAndStorageResult.zoomAfterMinus, 1, '- should zoom back out to 1');
+
+    assert.equal(shortcutAndStorageResult.storedRate, '0.25', 'Playback speed should be persisted in localStorage');
+    assert.equal(shortcutAndStorageResult.storedDock, 'right', 'Docking position should be persisted in localStorage');
+    assert.equal(shortcutAndStorageResult.rateAfterSuccessiveRecording, 0.25);
+    assert.equal(shortcutAndStorageResult.dockAfterSuccessiveRecording, 'right');
+    assert.equal(shortcutAndStorageResult.freshLoadedRate, 0.25, 'New visualizer instance should restore playbackRate from localStorage');
+    assert.equal(shortcutAndStorageResult.freshLoadedDock, 'right', 'New visualizer instance should restore dockPosition from localStorage');
+  });
 });
+
 
 
