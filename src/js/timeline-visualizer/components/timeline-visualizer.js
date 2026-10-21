@@ -323,8 +323,8 @@ const COMPONENT_STYLES = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    padding: 6px 12px;
+    gap: 6px;
+    padding: 6px 10px;
     background: var(--bg-panel-elevated);
     border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
@@ -336,7 +336,7 @@ const COMPONENT_STYLES = `
   .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
   }
 
@@ -352,7 +352,7 @@ const COMPONENT_STYLES = `
   .status-pill {
     font-size: 11px;
     font-weight: 600;
-    padding: 2px 8px;
+    padding: 2px 7px;
     border-radius: 999px;
     background: rgba(245, 158, 11, 0.16);
     color: #fbbf24;
@@ -362,11 +362,50 @@ const COMPONENT_STYLES = `
   .scrubber-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     background: rgba(15, 23, 42, 0.7);
-    padding: 3px 10px;
+    padding: 2px 8px;
     border-radius: 8px;
     border: 1px solid var(--border-subtle);
+  }
+
+  /* Playback Speed Multi-Button Chooser */
+  .speed-chooser {
+    display: inline-flex;
+    align-items: center;
+    background: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .speed-btn {
+    appearance: none;
+    border: none;
+    border-right: 1px solid rgba(148, 163, 184, 0.2);
+    background: transparent;
+    color: #94a3b8;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 6px;
+    cursor: pointer;
+    line-height: 1.2;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .speed-btn:last-child {
+    border-right: none;
+  }
+
+  .speed-btn:hover {
+    background: rgba(51, 65, 85, 0.65);
+    color: #f8fafc;
+  }
+
+  .speed-btn.is-active {
+    background: rgba(56, 189, 248, 0.2);
+    color: #38bdf8;
   }
 
   /* Docking Position Icon Chooser */
@@ -387,7 +426,7 @@ const COMPONENT_STYLES = `
     background: transparent;
     color: #94a3b8;
     font-family: inherit;
-    padding: 5px 7px;
+    padding: 5px 6px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -458,7 +497,7 @@ const COMPONENT_STYLES = `
     background: #1e293b;
     color: #e2e8f0;
     border-radius: 6px;
-    padding: 4px 9px;
+    padding: 4px 8px;
     font-family: inherit;
     font-size: 12px;
     font-weight: 600;
@@ -484,16 +523,16 @@ const COMPONENT_STYLES = `
   }
 
   .scrubber-slider {
-    width: 136px;
+    width: 108px;
     accent-color: #38bdf8;
     cursor: pointer;
   }
 
   .time-readout {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12px;
+    font-size: 11px;
     color: #38bdf8;
-    min-width: 112px;
+    min-width: 96px;
     text-align: right;
   }
 
@@ -1072,6 +1111,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     this.isCollapsed = false;
     this.currentScrubTime = 0;
     this.dockPosition = 'bottom';
+    this.playbackRate = 1;
 
     this._sheetHeightPx = 400;
     this._sheetWidthPx = 620;
@@ -1194,6 +1234,65 @@ export class TimelineVisualizer extends BaseHTMLElement {
       'data-testid': 'visualizer-status',
       textContent: 'Page Paused · Scrub Mode',
     });
+
+    // Playback Speed Multi-Button Chooser: 25% | 50% | 100% (default 100%)
+    this._speedBtn25 = h(
+      'button',
+      {
+        type: 'button',
+        className: 'speed-btn',
+        'data-testid': 'speed-btn-25',
+        'data-speed': '0.25',
+        'aria-label': '25% playback speed',
+        'aria-pressed': 'false',
+        title: '25% playback speed',
+        onClick: () => this.setPlaybackRate(0.25),
+      },
+      '25%'
+    );
+
+    this._speedBtn50 = h(
+      'button',
+      {
+        type: 'button',
+        className: 'speed-btn',
+        'data-testid': 'speed-btn-50',
+        'data-speed': '0.5',
+        'aria-label': '50% playback speed',
+        'aria-pressed': 'false',
+        title: '50% playback speed',
+        onClick: () => this.setPlaybackRate(0.5),
+      },
+      '50%'
+    );
+
+    this._speedBtn100 = h(
+      'button',
+      {
+        type: 'button',
+        className: 'speed-btn is-active',
+        'data-testid': 'speed-btn-100',
+        'data-speed': '1',
+        'aria-label': '100% playback speed',
+        'aria-pressed': 'true',
+        title: '100% playback speed',
+        onClick: () => this.setPlaybackRate(1),
+      },
+      '100%'
+    );
+
+    this._speedChooser = h(
+      'div',
+      {
+        className: 'speed-chooser',
+        role: 'group',
+        'aria-label': 'Playback speed',
+        'data-testid': 'speed-chooser',
+      },
+      this._speedBtn25,
+      this._speedBtn50,
+      this._speedBtn100
+    );
 
     this._playScrubBtn = h(
       'button',
@@ -1351,7 +1450,8 @@ export class TimelineVisualizer extends BaseHTMLElement {
         'div',
         { className: 'toolbar-left' },
         h('span', { className: 'toolbar-title', textContent: 'Timeline Visualizer' }),
-        this._statusPill
+        this._statusPill,
+        this._speedChooser
       ),
       h(
         'div',
@@ -2752,6 +2852,30 @@ export class TimelineVisualizer extends BaseHTMLElement {
     }
   }
 
+  /**
+   * Sets the timeline replay speed multiplier (0.25 for 25%, 0.5 for 50%, 1 for 100%).
+   *
+   * @param {number} rate
+   */
+  setPlaybackRate(rate) {
+    let num = Number(rate);
+    if (num > 1) num = num / 100;
+    const valid = num === 0.25 || num === 0.5 ? num : 1;
+    this.playbackRate = valid;
+
+    const buttons = [
+      [this._speedBtn25, 0.25],
+      [this._speedBtn50, 0.5],
+      [this._speedBtn100, 1],
+    ];
+    for (const [btn, speed] of buttons) {
+      if (!btn) continue;
+      const active = speed === valid;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+  }
+
   _toggleTimelineReplay() {
     if (this._playbackRafId) {
       this._stopTimelineReplay();
@@ -2759,20 +2883,22 @@ export class TimelineVisualizer extends BaseHTMLElement {
     }
 
     const duration = Math.max(1, this.store.duration || 1);
-    let startPlayAt = this.currentScrubTime >= duration - 10 ? 0 : this.currentScrubTime;
-    const playOriginWall = performance.now();
+    let currentPlayTime = this.currentScrubTime >= duration - 10 ? 0 : this.currentScrubTime;
+    let lastFrameWall = performance.now();
 
     this._playScrubBtn.textContent = '⏸ Pause';
 
     const step = () => {
-      const elapsed = performance.now() - playOriginWall;
-      const nextTime = startPlayAt + elapsed;
-      if (nextTime >= duration) {
+      const now = performance.now();
+      const dt = Math.max(0, now - lastFrameWall);
+      lastFrameWall = now;
+      currentPlayTime += dt * (this.playbackRate || 1);
+      if (currentPlayTime >= duration) {
         this.scrubToTime(duration);
         this._stopTimelineReplay();
         return;
       }
-      this.scrubToTime(nextTime);
+      this.scrubToTime(currentPlayTime);
       this._playbackRafId = requestAnimationFrame(step);
     };
 

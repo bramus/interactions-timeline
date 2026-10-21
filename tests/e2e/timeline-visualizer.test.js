@@ -696,5 +696,72 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
     assert.equal(dockResult.popupClosedAfterReturn, true, 'Popup window should be closed after docking back');
     assert.equal(dockResult.collapseVisibleAgainInBottom, true, 'Collapse button should be visible again when docked back to bottom');
   });
+
+  it('provides a playback speed multi-button chooser (25%, 50%, 100%, default 100%) in the left of the top toolbar', async () => {
+    const speedResult = await page.evaluate(() => {
+      const visualizer = document.querySelector('timeline-visualizer');
+      const toolbarLeft = visualizer.shadowRoot.querySelector('.toolbar-left');
+      const chooser = visualizer._speedChooser;
+      const btn25 = visualizer._speedBtn25;
+      const btn50 = visualizer._speedBtn50;
+      const btn100 = visualizer._speedBtn100;
+
+      const inToolbarLeft = Boolean(toolbarLeft && chooser && toolbarLeft.contains(chooser));
+      const labels = [btn25?.textContent, btn50?.textContent, btn100?.textContent];
+      const defaultRate = visualizer.playbackRate;
+      const default100Active = Boolean(btn100?.classList.contains('is-active'));
+
+      btn25.click();
+      const rateAfter25 = visualizer.playbackRate;
+      const activeAfter25 = [
+        btn25.classList.contains('is-active'),
+        btn50.classList.contains('is-active'),
+        btn100.classList.contains('is-active'),
+      ];
+
+      btn50.click();
+      const rateAfter50 = visualizer.playbackRate;
+      const activeAfter50 = [
+        btn25.classList.contains('is-active'),
+        btn50.classList.contains('is-active'),
+        btn100.classList.contains('is-active'),
+      ];
+
+      btn100.click();
+      const rateAfter100 = visualizer.playbackRate;
+      const activeAfter100 = [
+        btn25.classList.contains('is-active'),
+        btn50.classList.contains('is-active'),
+        btn100.classList.contains('is-active'),
+      ];
+
+      return {
+        inToolbarLeft,
+        labels,
+        defaultRate,
+        default100Active,
+        rateAfter25,
+        activeAfter25,
+        rateAfter50,
+        activeAfter50,
+        rateAfter100,
+        activeAfter100,
+      };
+    });
+
+    assert.equal(speedResult.inToolbarLeft, true, 'Speed chooser should be inside .toolbar-left');
+    assert.deepEqual(speedResult.labels, ['25%', '50%', '100%']);
+    assert.equal(speedResult.defaultRate, 1);
+    assert.equal(speedResult.default100Active, true);
+
+    assert.equal(speedResult.rateAfter25, 0.25);
+    assert.deepEqual(speedResult.activeAfter25, [true, false, false]);
+
+    assert.equal(speedResult.rateAfter50, 0.5);
+    assert.deepEqual(speedResult.activeAfter50, [false, true, false]);
+
+    assert.equal(speedResult.rateAfter100, 1);
+    assert.deepEqual(speedResult.activeAfter100, [false, false, true]);
+  });
 });
 
