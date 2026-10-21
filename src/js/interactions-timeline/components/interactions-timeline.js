@@ -1,6 +1,6 @@
 /**
- * <timeline-visualizer> Custom Element
- * Encapsulates a page timeline recorder and collapsible/resizable bottom-sheet visualizer
+ * <interactions-timeline> Custom Element
+ * Encapsulates a page interactions/animations recorder and collapsible/resizable timeline visualizer
  * inside Shadow DOM, ignoring its own DOM subtree during recording and pausing/scrubbing.
  */
 
@@ -1133,12 +1133,12 @@ const COMPONENT_STYLES = `
   }
 `;
 
-export const STORAGE_KEY_PLAYBACK_RATE = 'timeline-visualizer:playback-rate';
-export const STORAGE_KEY_DOCK_POSITION = 'timeline-visualizer:dock-position';
+export const STORAGE_KEY_PLAYBACK_RATE = 'interactions-timeline:playback-rate';
+export const STORAGE_KEY_DOCK_POSITION = 'interactions-timeline:dock-position';
 
 const BaseHTMLElement = typeof HTMLElement !== 'undefined' ? HTMLElement : class {};
 
-export class TimelineVisualizer extends BaseHTMLElement {
+export class InteractionsTimeline extends BaseHTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -1905,7 +1905,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
     if (!popup || popup.closed) {
       popup = window.open(
         '',
-        'timeline-visualizer-popout',
+        'interactions-timeline-popout',
         'popup=yes,width=980,height=520'
       );
       this._popupWindow = popup;
@@ -1917,11 +1917,11 @@ export class TimelineVisualizer extends BaseHTMLElement {
     }
 
     const popDoc = popup.document;
-    popDoc.title = 'Timeline Visualizer';
+    popDoc.title = 'Interactions Timeline';
 
-    if (!popDoc.getElementById('timeline-visualizer-popout-styles')) {
+    if (!popDoc.getElementById('interactions-timeline-popout-styles')) {
       const popStyle = popDoc.createElement('style');
-      popStyle.id = 'timeline-visualizer-popout-styles';
+      popStyle.id = 'interactions-timeline-popout-styles';
       popStyle.textContent = `
         html, body {
           margin: 0;
@@ -2217,7 +2217,7 @@ export class TimelineVisualizer extends BaseHTMLElement {
   }
 
   /**
-   * Checks whether a DOM node is part of `<timeline-visualizer>` or its Shadow DOM / Popout window.
+   * Checks whether a DOM node is part of `<interactions-timeline>` or its Shadow DOM / Popout window.
    *
    * @param {Node|EventTarget|null} node
    * @returns {boolean}
@@ -3740,22 +3740,22 @@ export class TimelineVisualizer extends BaseHTMLElement {
   }
 }
 
-if (typeof customElements !== 'undefined' && !customElements.get('timeline-visualizer')) {
-  customElements.define('timeline-visualizer', TimelineVisualizer);
+if (typeof customElements !== 'undefined' && !customElements.get('interactions-timeline')) {
+  customElements.define('interactions-timeline', InteractionsTimeline);
 }
 
 /**
- * Ensures a `<timeline-visualizer>` instance is mounted in the document.
+ * Ensures an `<interactions-timeline>` instance is mounted in the document.
  *
- * @returns {TimelineVisualizer|null}
+ * @returns {InteractionsTimeline|null}
  */
-export function ensureTimelineVisualizerMounted() {
+export function ensureInteractionsTimelineMounted() {
   if (typeof document === 'undefined') return null;
-  if (window.__TIMELINE_VISUALIZER_NO_AUTO_INJECT__) return null;
+  if (window.__INTERACTIONS_TIMELINE_NO_AUTO_INJECT__) return null;
 
-  let existing = document.querySelector('timeline-visualizer');
+  let existing = document.querySelector('interactions-timeline');
   if (!existing && document.body) {
-    existing = document.createElement('timeline-visualizer');
+    existing = document.createElement('interactions-timeline');
     document.body.appendChild(existing);
   }
   return existing;
@@ -3763,10 +3763,11 @@ export function ensureTimelineVisualizerMounted() {
 
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => ensureTimelineVisualizerMounted(), { once: true });
+    document.addEventListener('DOMContentLoaded', () => ensureInteractionsTimelineMounted(), { once: true });
   } else {
-    ensureTimelineVisualizerMounted();
+    ensureInteractionsTimelineMounted();
   }
 }
 
-export default TimelineVisualizer;
+export default InteractionsTimeline;
+

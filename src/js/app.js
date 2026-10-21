@@ -1,10 +1,10 @@
 /**
- * <timeline-visualizer> Interactive Demo & Documentation App
+ * <interactions-timeline> Interactive Demo & Documentation App
  */
 
-export class TimelineVisualizerDemoApp {
+export class InteractionsTimelineDemoApp {
   constructor() {
-    this.visualizer = document.querySelector('timeline-visualizer');
+    this.visualizer = document.querySelector('interactions-timeline');
     this.delayedIterBox = document.getElementById('delayed-iter-box');
     this.transitionCard = document.getElementById('transition-card');
     this.waapiActor = document.getElementById('waapi-actor');
@@ -201,7 +201,7 @@ export class TimelineVisualizerDemoApp {
   }
 
   async runAutoShowcase() {
-    const visualizer = this.visualizer || document.querySelector('timeline-visualizer');
+    const visualizer = this.visualizer || document.querySelector('interactions-timeline');
     if (!visualizer) return;
 
     if (this.autoDemoStatus) {
@@ -369,9 +369,9 @@ export class TimelineVisualizerDemoApp {
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-      window.demoApp = new TimelineVisualizerDemoApp();
+      window.demoApp = new InteractionsTimelineDemoApp();
     });
   } else {
-    window.demoApp = new TimelineVisualizerDemoApp();
+    window.demoApp = new InteractionsTimelineDemoApp();
   }
 }

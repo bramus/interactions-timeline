@@ -1,5 +1,5 @@
 {
-  "name": "timeline-visualizer",
+  "name": "interactions-timeline",
   "version": "1.0.0",
   "description": "A page timeline recorder and interactive visualizer with time-scrubbing for CSS animations, CSS transitions, WAAPI, Scroll-Driven Animations, scroll positions, and user interactions",
   "type": "module",
@@ -22,7 +22,7 @@
     "test:e2e": "node --test tests/e2e/**/*.test.js"
   },
   "keywords": [
-    "timeline-visualizer",
+    "interactions-timeline",
     "timeline-recorder",
     "web-animations",
     "scroll-driven-animations",
@@ -41,12 +41,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bramus/timeline-visualizer.git"
+    "url": "git+https://github.com/bramus/interactions-timeline.git"
   },
   "bugs": {
-    "url": "https://github.com/bramus/timeline-visualizer/issues"
+    "url": "https://github.com/bramus/interactions-timeline/issues"
   },
-  "homepage": "https://timeline-visualizer.netlify.app/",
+  "homepage": "https://interactions-timeline.netlify.app/",
   "devDependencies": {
     "puppeteer": "^25.11.0"
   }

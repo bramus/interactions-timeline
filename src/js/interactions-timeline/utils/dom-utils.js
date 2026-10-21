@@ -1,5 +1,5 @@
 /**
- * DOM, Animation, and Security-Safe Element Utilities for <timeline-visualizer>
+ * DOM, Animation, and Security-Safe Element Utilities for <interactions-timeline>
  */
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -66,7 +66,7 @@ export function isElementInRecorder(node, recorderElement, shadowRoot) {
     if (shadowRoot && current === shadowRoot) return true;
 
     const localName = current.localName || (current.tagName ? String(current.tagName).toLowerCase() : '');
-    if (localName === 'timeline-visualizer') return true;
+    if (localName === 'interactions-timeline') return true;
 
     if (typeof current.getRootNode === 'function') {
       const root = current.getRootNode();

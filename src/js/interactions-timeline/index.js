@@ -1,13 +1,13 @@
 /**
- * <timeline-visualizer> Entry Point
- * Registers the <timeline-visualizer> custom element, auto-mounts the recorder UI,
+ * <interactions-timeline> Entry Point
+ * Registers the <interactions-timeline> custom element, auto-mounts the recorder UI,
  * and exports public classes and utilities.
  */
 
 import {
-  TimelineVisualizer,
-  ensureTimelineVisualizerMounted,
-} from './components/timeline-visualizer.js';
+  InteractionsTimeline,
+  ensureInteractionsTimelineMounted,
+} from './components/interactions-timeline.js';
 import {
   formatElementLabel,
   isElementInRecorder,
@@ -29,8 +29,8 @@ import {
 } from './utils/timeline-store.js';
 
 export {
-  TimelineVisualizer,
-  ensureTimelineVisualizerMounted,
+  InteractionsTimeline,
+  ensureInteractionsTimelineMounted,
   TimelineStore,
   formatElementLabel,
   isElementInRecorder,
@@ -48,4 +48,4 @@ export {
   assignAnimationLanes,
 };
 
-export default TimelineVisualizer;
+export default InteractionsTimeline;

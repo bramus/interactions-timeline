@@ -56,7 +56,7 @@ function startStaticServer(rootDir) {
   });
 }
 
-describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver BiDi)', () => {
+describe('<interactions-timeline> End-to-End Browser Tests (Puppeteer + WebDriver BiDi)', () => {
   let serverInfo;
   let browser;
   let page;
@@ -81,9 +81,9 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
     }
   });
 
-  it('mounts <timeline-visualizer> with Shadow DOM and positions the record button in the top right', async () => {
+  it('mounts <interactions-timeline> with Shadow DOM and positions the record button in the top right', async () => {
     const info = await page.evaluate(() => {
-      const el = document.querySelector('timeline-visualizer');
+      const el = document.querySelector('interactions-timeline');
       if (!el || !el.shadowRoot) return null;
 
       const floatingBar = el.shadowRoot.querySelector('.recorder-floating-bar');
@@ -105,7 +105,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       };
     });
 
-    assert.ok(info, '<timeline-visualizer> should exist with an open shadowRoot');
+    assert.ok(info, '<interactions-timeline> should exist with an open shadowRoot');
     assert.equal(info.hasShadowRoot, true);
     assert.equal(info.hasRecBtn, true);
     assert.equal(info.recBtnText, 'Start Recording');
@@ -121,7 +121,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('records animations, transitions (with delay), WAAPI, scroll-driven animations, scrolls, interactions, and removed DOM elements while ignoring its own subtree', async () => {
     const recordingSummary = await page.evaluate(async () => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const recBtn = visualizer.shadowRoot.querySelector('[data-testid="record-btn"]');
 
       // Reset scroll and transition state before test
@@ -181,8 +181,8 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       );
       const rowSelectors = elementRows.map((r) => r.getAttribute('data-selector'));
 
-      // Verify no element inside <timeline-visualizer> was recorded
-      const hasOwnSubtreeRow = rowSelectors.some((s) => s.includes('timeline-visualizer') || s.includes('rec-btn'));
+      // Verify no element inside <interactions-timeline> was recorded
+      const hasOwnSubtreeRow = rowSelectors.some((s) => s.includes('interactions-timeline') || s.includes('rec-btn'));
 
       // Check boxes and lifecycle lines
       const boxes = Array.from(
@@ -259,7 +259,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('highlights the corresponding page element when hovering a connected element row', async () => {
     const hoverResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const connectedRow = visualizer.shadowRoot.querySelector(
         '[data-testid="element-row"][data-removed="false"]'
       );
@@ -282,7 +282,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('supports collapsing, expanding, and resizing the bottom sheet', async () => {
     const sheetState = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const sheet = visualizer.shadowRoot.querySelector('[data-testid="bottom-sheet"]');
       const collapseBtn = visualizer.shadowRoot.querySelector('[data-testid="collapse-btn"]');
 
@@ -307,7 +307,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('pauses page animations when presented and scrubs both scroll positions and completed/active animations across history', async () => {
     const scrubResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const infiniteSpinner = document.getElementById('infinite-spinner');
       const transitionCard = document.getElementById('transition-card');
       const scrollStage = document.getElementById('scroll-stage');
@@ -376,7 +376,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('restores and unpauses the page back to its normal interactive state when closed or reset', async () => {
     const restoreResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const infiniteSpinner = document.getElementById('infinite-spinner');
       const closeBtn = visualizer.shadowRoot.querySelector('[data-testid="close-btn"]');
 
@@ -408,7 +408,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
   it('invokes scrollIntoView and scrollTo during the auto-record showcase so root page scroll is recorded', async () => {
     const autoDemoResult = await page.evaluate(async () => {
       await window.demoApp.runAutoShowcase();
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const globalScrollSamples = visualizer.store.globalRow.scrollSamples;
       const globalScrollSpans = visualizer.store.globalRow.scrollSpans;
       const maxScrollRecorded = Math.max(...globalScrollSamples.map((s) => s.scrollTop));
@@ -429,7 +429,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('injects a checkbox in row entries that are a scroller (checked by default) to toggle scrolling on/off per scroller', async () => {
     const checkboxResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const scrollStage = document.getElementById('scroll-stage');
 
       const pinnedRow = visualizer.shadowRoot.querySelector('[data-testid="pinned-global-row"]');
@@ -547,7 +547,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('supports switching docking position via the icon-only chooser: left, bottom, right, and popout', async () => {
     const dockResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const sheet = visualizer._bottomSheet;
       const btnLeft = visualizer._dockBtnLeft;
       const btnBottom = visualizer._dockBtnBottom;
@@ -699,7 +699,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('provides a playback speed multi-button chooser (25%, 50%, 100%, default 100%) in the left of the top toolbar', async () => {
     const speedResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const toolbarLeft = visualizer.shadowRoot.querySelector('.toolbar-left');
       const chooser = visualizer._speedChooser;
       const btn25 = visualizer._speedBtn25;
@@ -766,7 +766,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('supports mouse zooming (CMD/CTRL + wheel on horizontal axis only) and panning (vertical wheel, horizontal wheel, SHIFT + vertical wheel)', async () => {
     const zoomPanResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const viewport = visualizer._timelineViewport;
       const rulerTrack = visualizer._rulerTrack;
       const firstRow = visualizer.shadowRoot.querySelector('.timeline-row');
@@ -932,7 +932,7 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
 
   it('supports keyboard shortcuts when focused (ArrowLeft/Right, Space, </>, +/-) and persists playback speed and docking position in LocalStorage across recordings', async () => {
     const shortcutAndStorageResult = await page.evaluate(() => {
-      const visualizer = document.querySelector('timeline-visualizer');
+      const visualizer = document.querySelector('interactions-timeline');
       const sheet = visualizer._bottomSheet;
       sheet.focus();
 
@@ -985,8 +985,8 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       // 5. LocalStorage persistence across recordings and new instances
       visualizer.setPlaybackRate(0.25);
       visualizer.setDockPosition('right');
-      const storedRate = localStorage.getItem('timeline-visualizer:playback-rate');
-      const storedDock = localStorage.getItem('timeline-visualizer:dock-position');
+      const storedRate = localStorage.getItem('interactions-timeline:playback-rate');
+      const storedDock = localStorage.getItem('interactions-timeline:dock-position');
 
       // Start and stop a new recording and verify settings persist
       visualizer.startRecording();
@@ -994,8 +994,8 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       const rateAfterSuccessiveRecording = visualizer.playbackRate;
       const dockAfterSuccessiveRecording = visualizer.dockPosition;
 
-      // Create a brand new <timeline-visualizer> instance and verify it loads from LocalStorage
-      const TempCtor = customElements.get('timeline-visualizer');
+      // Create a brand new <interactions-timeline> instance and verify it loads from LocalStorage
+      const TempCtor = customElements.get('interactions-timeline');
       const freshInstance = new TempCtor();
       const freshLoadedRate = freshInstance.playbackRate;
       const freshLoadedDock = freshInstance.dockPosition;
@@ -1003,8 +1003,8 @@ describe('<timeline-visualizer> End-to-End Browser Tests (Puppeteer + WebDriver 
       // Clean up back to defaults
       visualizer.setPlaybackRate(1);
       visualizer.setDockPosition('bottom');
-      localStorage.removeItem('timeline-visualizer:playback-rate');
-      localStorage.removeItem('timeline-visualizer:dock-position');
+      localStorage.removeItem('interactions-timeline:playback-rate');
+      localStorage.removeItem('interactions-timeline:dock-position');
 
       return {
         tInitial,

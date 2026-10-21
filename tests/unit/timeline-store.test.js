@@ -15,7 +15,7 @@ import {
   interpolateScroll,
   interpolateAnimationState,
   assignAnimationLanes,
-} from '../../src/js/timeline-visualizer/index.js';
+} from '../../src/js/interactions-timeline/index.js';
 
 describe('DOM & Animation Utilities (dom-utils)', () => {
   it('formats element labels as tag#id.class', () => {
@@ -38,7 +38,7 @@ describe('DOM & Animation Utilities (dom-utils)', () => {
   });
 
   it('detects nodes and events inside the recorder Shadow DOM subtree', () => {
-    const recorderHost = { localName: 'timeline-visualizer' };
+    const recorderHost = { localName: 'interactions-timeline' };
     const shadowRoot = { host: recorderHost };
     const innerButton = {
       localName: 'button',
